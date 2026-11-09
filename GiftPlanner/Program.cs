@@ -18,6 +18,16 @@ if (args is ["hash-password", .. var rest])
     return 0;
 }
 
+// `dotnet GiftPlanner.dll lookup <url>` prints what the product lookup finds (for debugging stores).
+if (args is ["lookup", var lookupUrl])
+{
+    var http = new HttpClient(new HttpClientHandler { AutomaticDecompression = System.Net.DecompressionMethods.All });
+    ProductLookup.Configure(http);
+    var info = await new ProductLookup(http, LoggerFactory.Create(b => b.AddSimpleConsole()).CreateLogger<ProductLookup>()).LookupAsync(lookupUrl);
+    Console.WriteLine(info?.ToString() ?? "(page couldn't be fetched)");
+    return 0;
+}
+
 // The container has no locale, so .NET would format prices with the generic "¤" sign. Always use US dollars.
 var usCulture = (System.Globalization.CultureInfo)System.Globalization.CultureInfo.InvariantCulture.Clone();
 usCulture.NumberFormat.CurrencySymbol = "$";

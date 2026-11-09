@@ -97,7 +97,11 @@ public sealed partial class ProductLookup(HttpClient http, ILogger<ProductLookup
         title ??= Meta(html, "og:title") ?? Meta(html, "twitter:title") ?? TitleTag(html);
         price ??= ParsePrice(Meta(html, "product:price:amount") ?? Meta(html, "og:price:amount") ?? ItemPropPrice(html));
 
-        image = Meta(html, "og:image") ?? Meta(html, "og:image:secure_url") ?? Meta(html, "twitter:image") ?? image;
+        // Store-specific spots for pages that skip schema.org prices.
+        price ??= AmazonPrice(html) ?? WalmartPrice(html);
+
+        image = Meta(html, "og:image") ?? Meta(html, "og:image:secure_url") ?? Meta(html, "twitter:image") ?? image
+                ?? AmazonImage(html);
 
         return new ProductInfo(CleanTitle(title, Meta(html, "og:site_name")), price, image);
     }
@@ -135,6 +139,28 @@ public sealed partial class ProductLookup(HttpClient http, ILogger<ProductLookup
         var json = JsonSerializer.Serialize(new { name = Str(group, "name"), image = ImageOf(variant) ?? ImageOf(group), offers = new { price = p } });
         return JsonDocument.Parse(json).RootElement.Clone();
     }
+
+    /// <summary>Amazon: the buy-box price data, then the big "price to pay" display, then the core price block.</summary>
+    private static decimal? AmazonPrice(string html)
+    {
+        if (Regex.Match(html, @"twister-plus-buying-options-price-data[^>]*>\s*\{[^<]*?""priceAmount""\s*:\s*([\d.]+)") is { Success: true } a)
+            return ParsePrice(a.Groups[1].Value);
+        if (Regex.Match(html, @"priceToPay[^>]*>.{0,400}?a-price-whole"">\s*([\d,]+).{0,200}?a-price-fraction"">\s*(\d+)", RegexOptions.Singleline) is { Success: true } b)
+            return ParsePrice($"{b.Groups[1].Value}.{b.Groups[2].Value}");
+        if (Regex.Match(html, @"id=""corePrice(?:Display_desktop)?_feature_div"".{0,3000}?a-offscreen"">\s*(\$[\d,.]+)", RegexOptions.Singleline) is { Success: true } c)
+            return ParsePrice(c.Groups[1].Value);
+        return null;
+    }
+
+    private static string? AmazonImage(string html) =>
+        Regex.Match(html, @"data-old-hires=""(https://[^""]+)""") is { Success: true } a ? a.Groups[1].Value
+        : Regex.Match(html, @"""hiRes""\s*:\s*""(https://[^""]+)""") is { Success: true } b ? b.Groups[1].Value
+        : null;
+
+    /// <summary>Walmart (and Sam's Club) keep the live price in their page data.</summary>
+    private static decimal? WalmartPrice(string html) =>
+        Regex.Match(html, @"""priceInfo""\s*:\s*\{\s*""currentPrice""\s*:\s*\{[^}]*?""price""\s*:\s*([\d.]+)") is { Success: true } m
+            ? ParsePrice(m.Groups[1].Value) : null;
 
     private static string? ImageOf(JsonElement e)
     {
@@ -218,6 +244,8 @@ public sealed partial class ProductLookup(HttpClient http, ILogger<ProductLookup
                 title = m.Groups[1].Value.Trim();
         }
         // Amazon style: "Amazon.com: Thing Name : Toys & Games"
+        // Amazon style: "Thing Name: Brand: 0000772053761: Amazon.com: Toys & Games"
+        title = Regex.Replace(title, @"(?:\s*:\s*[^:]{1,60}){0,2}\s*:\s*Amazon\.[a-z.]+\s*:\s*[^:]*$", "", RegexOptions.IgnoreCase);
         if (Regex.IsMatch(title, @"^Amazon\.[a-z.]+\s*:", RegexOptions.IgnoreCase))
         {
             title = Regex.Replace(title, @"^Amazon\.[a-z.]+\s*:\s*", "", RegexOptions.IgnoreCase);
