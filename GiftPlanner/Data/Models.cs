@@ -20,8 +20,8 @@ public class GiverGroup
 public class Gift
 {
     public int Id { get; set; }
-    public int KidId { get; set; }
-    public Kid Kid { get; set; } = null!;
+    /// <summary>Who it's for: one kid, several, or all of them (e.g. a family board game).</summary>
+    public List<Kid> Kids { get; set; } = [];
     public string Title { get; set; } = "";
     public string? Url { get; set; }
     /// <summary>Product picture found on the linked page.</summary>
@@ -29,9 +29,11 @@ public class Gift
     public string Store => GiftPlanner.Gifts.Stores.FromUrl(Url);
     public decimal? Price { get; set; }
     public string? Notes { get; set; }
-    public int? GroupId { get; set; }
-    public GiverGroup? Group { get; set; }
+    /// <summary>Groups whose link shows this gift. The first group to mark it bought claims it.</summary>
+    public List<GiverGroup> Groups { get; set; } = [];
     public DateTime? PurchasedAt { get; set; }
+    public int? PurchasedByGroupId { get; set; }
+    public GiverGroup? PurchasedByGroup { get; set; }
     public bool Archived { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }

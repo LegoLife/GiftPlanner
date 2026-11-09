@@ -39,6 +39,10 @@
     }
 </div>
 
+<MudTextField @bind-Value="_search" Placeholder="Search gifts" Immediate="true" DebounceInterval="150"
+              Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" Clearable="true"
+              Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-2" Style="max-width:360px" />
+
 <MudChipSet T="int?" @bind-SelectedValue="_kidFilter" SelectionMode="SelectionMode.SingleSelection" Class="mb-2">
     <MudChip T="int?" Value="null" Default="true">Everyone</MudChip>
     @foreach (var kid in _kids)
@@ -47,7 +51,7 @@
     }
 </MudChipSet>
 
-<MudTable Items="Sorted(Visible)" GroupBy="_byKid" Hover="true" Dense="true" Breakpoint="Breakpoint.Sm" Elevation="0" Outlined="true">
+<MudTable Items="Sorted(Visible)" GroupBy="ByKid" Hover="true" Dense="true" Breakpoint="Breakpoint.Sm" Elevation="0" Outlined="true">
     <GroupHeaderTemplate>
         <MudTh colspan="6" Class="@(context.GroupName == "Kid" ? "kid-header" : "store-header")">
             <MudIcon Icon="@(context.GroupName == "Kid" ? Icons.Material.Filled.ChildCare : Icons.Material.Filled.Storefront)"
@@ -85,13 +89,14 @@
         </MudTd>
         <MudTd DataLabel="Price">@context.Price?.ToString("C")</MudTd>
         <MudTd DataLabel="Who buys it" Style="min-width:180px">
-            <MudSelect T="int?" Value="context.GroupId" ValueChanged="v => AssignAsync(context, v)"
+            <MudSelect T="int" MultiSelection="true" SelectAll="@(_groups.Count > 1)" SelectAllText="Any group"
+                       SelectedValues="context.Groups.Select(g => g.Id).ToList()" SelectedValuesChanged="v => AssignAsync(context, v)"
+                       MultiSelectionTextFunc="_ => GroupsText(context)"
                        Dense="true" Margin="Margin.Dense" Variant="Variant.Outlined"
                        Placeholder="Unassigned" Disabled="@(context.PurchasedAt != null)">
-                <MudSelectItem T="int?" Value="null">Unassigned</MudSelectItem>
                 @foreach (var g in _groups)
                 {
-                    <MudSelectItem T="int?" Value="g.Id">@g.Name</MudSelectItem>
+                    <MudSelectItem Value="g.Id">@g.Name</MudSelectItem>
                 }
             </MudSelect>
         </MudTd>
@@ -100,7 +105,7 @@
             <MudTd DataLabel="Status">
                 @if (context.PurchasedAt is not null)
                 {
-                    <MudTooltip Text="@($"Marked {context.PurchasedAt.Value.ToLocalTime():MMM d}")">
+                    <MudTooltip Text="@($"{context.PurchasedByGroup?.Name ?? "Marked"} · {context.PurchasedAt.Value.ToLocalTime():MMM d}")">
                         <MudChip T="string" Size="Size.Small" Color="Color.Success" Icon="@Icons.Material.Filled.Check"
                                  OnClose="() => ClearAsync(context)">Bought</MudChip>
                     </MudTooltip>
@@ -132,16 +137,21 @@
 
     // Stores A–Z, with link-less gifts last.
     // Kid first, then store within each kid.
-    private readonly TableGroupDefinition<Gift> _byKid = new()
+    private TableGroupDefinition<Gift>? _byKid;
+    private TableGroupDefinition<Gift> ByKid => _byKid ??= new()
     {
-        GroupName = "Kid", Selector = g => g.Kid.Name, Indentation = false,
+        GroupName = "Kid", Selector = g => GiftService.KidsLabel(g.Kids, _kids!.Count), Indentation = false,
         InnerGroup = new TableGroupDefinition<Gift> { GroupName = "Store", Selector = g => g.Store, Indentation = false },
     };
     private static decimal StoreTotal(IEnumerable<Gift> gifts) => gifts.Sum(g => g.Price ?? 0);
 
-    private IEnumerable<Gift> Visible => _kidFilter is null ? _gifts : _gifts.Where(g => g.KidId == _kidFilter);
+    private string? _search;
+
+    private IEnumerable<Gift> Visible => _gifts
+        .Where(g => _kidFilter is null || g.Kids.Any(k => k.Id == _kidFilter))
+        .Where(g => string.IsNullOrWhiteSpace(_search) || g.Title.Contains(_search.Trim(), StringComparison.OrdinalIgnoreCase));
     private IEnumerable<Gift> Sorted(IEnumerable<Gift> gifts) =>
-        gifts.OrderBy(g => g.Kid.Name).ThenBy(g => g.Store == Stores.NoLink).ThenBy(g => g.Store);
+        gifts.OrderBy(g => g.Kids.Count > 1).ThenBy(g => GiftService.KidsLabel(g.Kids, _kids!.Count) == "Everyone").ThenBy(g => GiftService.KidsLabel(g.Kids, _kids!.Count)).ThenBy(g => g.Store == Stores.NoLink).ThenBy(g => g.Store);
 
     private readonly CancellationTokenSource _cts = new();
 
@@ -180,26 +190,30 @@
     private async Task EditAsync(Gift? gift)
     {
         var copy = gift is null
-            ? new Gift { KidId = _kidFilter ?? (_kids!.Count == 1 ? _kids[0].Id : 0) }
-            : new Gift { Id = gift.Id, KidId = gift.KidId, Title = gift.Title, Url = gift.Url, ImageUrl = gift.ImageUrl, Price = gift.Price, Notes = gift.Notes, GroupId = gift.GroupId };
+            ? new GiftEdit { KidIds = _kidFilter is { } k ? [k] : _kids!.Count == 1 ? [_kids[0].Id] : [] }
+            : GiftEdit.From(gift);
         var dialog = await DialogService.ShowAsync<GiftDialog>(null,
             new DialogParameters<GiftDialog> { { d => d.Gift, copy }, { d => d.Kids, _kids! }, { d => d.Groups, _groups } },
             new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
         var result = await dialog.Result;
-        if (result is null || result.Canceled || result.Data is not Gift edited) return;
+        if (result is null || result.Canceled || result.Data is not GiftEdit edited) return;
         await Gifts.SaveGiftAsync(edited);
         await LoadAsync();
     }
 
-    private async Task AssignAsync(Gift gift, int? groupId)
+    private string GroupsText(Gift gift) => gift.Groups.Count == 0 ? "Unassigned"
+        : _groups.Count > 1 && gift.Groups.Count >= _groups.Count ? "Any group"
+        : string.Join(", ", gift.Groups.Select(g => g.Name).Order());
+
+    private async Task AssignAsync(Gift gift, IEnumerable<int>? groupIds)
     {
-        await Gifts.AssignAsync(gift.Id, groupId);
+        await Gifts.AssignAsync(gift.Id, groupIds ?? []);
         await LoadAsync();
     }
 
     private async Task DeleteAsync(Gift gift)
     {
-        var ok = await DialogService.ShowMessageBoxAsync("Delete gift", $"Delete \"{gift.Title}\" from {gift.Kid.Name}'s list?",
+        var ok = await DialogService.ShowMessageBoxAsync("Delete gift", $"Delete \"{gift.Title}\" ({GiftService.KidsLabel(gift.Kids, _kids!.Count)})?",
             yesText: "Delete", cancelText: "Cancel");
         if (ok != true) return;
         await Gifts.DeleteGiftAsync(gift.Id);

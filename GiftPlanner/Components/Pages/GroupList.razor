@@ -27,7 +27,7 @@
 }
 else
 {
-    var kids = _gifts.Select(g => g.Kid.Name).Distinct().Order().ToList();
+    var kids = _gifts.SelectMany(g => g.Kids).Select(k => k.Name).Distinct().Order().ToList();
     var stores = _gifts.Select(g => g.Store).Distinct().OrderBy(x => x == Stores.NoLink).ThenBy(x => x).ToList();
     @if (kids.Count > 1)
     {
@@ -58,7 +58,8 @@ else
     }
 }
 
-@foreach (var kid in Filtered.GroupBy(g => g.Kid.Name).OrderBy(x => x.Key))
+@foreach (var kid in Filtered.GroupBy(g => GiftService.KidsLabel(g.Kids, _totalKids))
+                             .OrderBy(x => x.First().Kids.Count > 1).ThenBy(x => x.Key == "Everyone").ThenBy(x => x.Key))
 {
 <MudText Typo="Typo.h4" Class="mt-6 mb-1 kid-title">For @kid.Key</MudText>
 @foreach (var store in kid.GroupBy(g => g.Store)
@@ -100,10 +101,14 @@ else
                             <MudButton Variant="Variant.Filled" Color="Color.Secondary" Size="Size.Small"
                                        StartIcon="@Icons.Material.Filled.Check" OnClick="() => MarkAsync(gift)">I bought this</MudButton>
                         }
-                        else
+                        else if (gift.PurchasedByGroupId == _group.Id)
                         {
                             <MudChip T="string" Color="Color.Success" Size="Size.Small" Icon="@Icons.Material.Filled.Check">Bought</MudChip>
                             <MudButton Variant="Variant.Text" Size="Size.Small" OnClick="() => UnmarkAsync(gift)">Undo</MudButton>
+                        }
+                        else
+                        {
+                            <MudChip T="string" Size="Size.Small" Icon="@Icons.Material.Filled.Check">Someone else got this</MudChip>
                         }
                     </div>
                 </div>
@@ -119,10 +124,11 @@ else
     private GiverGroup? _group;
     private List<Gift> _gifts = [];
     private bool _loaded;
+    private int _totalKids;
     private string? _kid, _store; // null = show all
 
     private IEnumerable<Gift> Filtered => _gifts.Where(g =>
-        (_kid is null || g.Kid.Name == _kid) && (_store is null || g.Store == _store));
+        (_kid is null || g.Kids.Any(k => k.Name == _kid)) && (_store is null || g.Store == _store));
 
     private static string StoreLabel(string store) => store == Stores.NoLink ? "Anywhere" : store;
 
@@ -135,6 +141,7 @@ else
     private async Task LoadAsync()
     {
         _group = await Gifts.GetGroupByTokenAsync(Token);
+        _totalKids = (await Gifts.GetKidsAsync()).Count;
         _gifts = _group is null ? [] : await Gifts.GetGiftsForLinkAsync(Token);
     }
 

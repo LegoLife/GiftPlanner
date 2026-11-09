@@ -16,9 +16,10 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         {
             g.Ignore(x => x.Store);
             g.Property(x => x.Price).HasConversion<double?>(); // SQLite can't sort/sum decimal
-            // Deleting a group unassigns its gifts rather than deleting them.
-            g.HasOne(x => x.Group).WithMany(x => x.Gifts).HasForeignKey(x => x.GroupId).OnDelete(DeleteBehavior.SetNull);
-            g.HasOne(x => x.Kid).WithMany(x => x.Gifts).HasForeignKey(x => x.KidId).OnDelete(DeleteBehavior.Cascade);
+            g.HasMany(x => x.Kids).WithMany(x => x.Gifts).UsingEntity("GiftKid");
+            g.HasMany(x => x.Groups).WithMany(x => x.Gifts).UsingEntity("GiftGroup");
+            // Deleting the group that bought it leaves the gift bought, just without "by whom".
+            g.HasOne(x => x.PurchasedByGroup).WithMany().HasForeignKey(x => x.PurchasedByGroupId).OnDelete(DeleteBehavior.SetNull);
         });
     }
 }

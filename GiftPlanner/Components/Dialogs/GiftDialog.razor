@@ -5,7 +5,9 @@
     <TitleContent>@(Gift.Id == 0 ? "Add gift" : "Edit gift")</TitleContent>
     <DialogContent>
         <MudForm @ref="_form">
-            <MudSelect T="int" @bind-Value="Gift.KidId" Label="For" Required="true" RequiredError="Pick a kid">
+            <MudSelect T="int" Label="For" MultiSelection="true" SelectAll="@(Kids.Count > 1)" SelectAllText="Everyone"
+                       SelectedValues="Gift.KidIds" SelectedValuesChanged="v => { Gift.KidIds = (v ?? []).ToHashSet(); _kidError = false; }"
+                       MultiSelectionTextFunc="_ => KidsText" Error="_kidError" ErrorText="Pick at least one kid">
                 @foreach (var kid in Kids)
                 {
                     <MudSelectItem Value="kid.Id">@kid.Name</MudSelectItem>
@@ -37,11 +39,13 @@
                           MaxLength="300" Immediate="true" />
             <MudNumericField T="decimal?" @bind-Value="Gift.Price" Label="Price" Min="0" Format="0.00"
                              Adornment="Adornment.Start" AdornmentText="$" HideSpinButtons="true" />
-            <MudSelect T="int?" @bind-Value="Gift.GroupId" Label="Who buys it" Clearable="true">
-                <MudSelectItem T="int?" Value="null">Unassigned</MudSelectItem>
+            <MudSelect T="int" Label="Who buys it" MultiSelection="true" SelectAll="@(Groups.Count > 1)" SelectAllText="Any group"
+                       SelectedValues="Gift.GroupIds" SelectedValuesChanged="v => Gift.GroupIds = (v ?? []).ToHashSet()"
+                       MultiSelectionTextFunc="_ => GroupsText" Placeholder="Unassigned"
+                       HelperText="@(Gift.GroupIds.Count > 1 ? "Every group picked sees it. The first to mark it bought claims it." : null)">
                 @foreach (var group in Groups)
                 {
-                    <MudSelectItem T="int?" Value="group.Id">@group.Name</MudSelectItem>
+                    <MudSelectItem Value="group.Id">@group.Name</MudSelectItem>
                 }
             </MudSelect>
             <MudTextField @bind-Value="Gift.Notes" Label="Notes for the giver (size, colour…)" Lines="2" MaxLength="2000" />
@@ -57,11 +61,17 @@
     [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = null!;
 
     /// <summary>A detached copy to edit; returned as the dialog result on save.</summary>
-    [Parameter] public Gift Gift { get; set; } = new();
+    [Parameter] public GiftEdit Gift { get; set; } = new();
     [Parameter] public List<Kid> Kids { get; set; } = [];
     [Parameter] public List<GiverGroup> Groups { get; set; } = [];
 
     private MudForm _form = null!;
+    private bool _kidError;
+
+    private string KidsText => GiftService.KidsLabel(Kids.Where(k => Gift.KidIds.Contains(k.Id)), Kids.Count);
+    private string GroupsText => Gift.GroupIds.Count == 0 ? "Unassigned"
+        : Groups.Count > 1 && Gift.GroupIds.Count >= Groups.Count ? "Any group"
+        : string.Join(", ", Groups.Where(g => Gift.GroupIds.Contains(g.Id)).Select(g => g.Name));
     private bool _looking;
     private string? _lookupMessage;
     private CancellationTokenSource? _cts;
@@ -110,7 +120,8 @@
     private async Task SaveAsync()
     {
         await _form.ValidateAsync();
-        if (!_form.IsValid || Gift.KidId == 0) return;
+        _kidError = Gift.KidIds.Count == 0;
+        if (!_form.IsValid || _kidError) return;
         if (!string.IsNullOrWhiteSpace(Gift.Url) && !Gift.Url.Contains("://"))
             Gift.Url = "https://" + Gift.Url.Trim();
         Dialog.Close(DialogResult.Ok(Gift));

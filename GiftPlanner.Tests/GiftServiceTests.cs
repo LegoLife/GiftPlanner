@@ -10,7 +10,7 @@ public sealed class GiftServiceTests : IDisposable
 {
     private readonly SqliteConnection _connection = new("Data Source=:memory:");
     private readonly GiftService _svc;
-    private readonly int _johnny, _groupS, _groupJ;
+    private readonly int _johnny, _lyla, _groupS, _groupJ;
     private readonly string _linkS, _linkJ;
 
     public GiftServiceTests()
@@ -21,6 +21,7 @@ public sealed class GiftServiceTests : IDisposable
         _svc = new GiftService(factory);
 
         _johnny = _svc.AddKidAsync("Johnny").Result.Id;
+        _lyla = _svc.AddKidAsync("Lyla").Result.Id;
         var s = _svc.AddGroupAsync("Grandparents S").Result;
         var j = _svc.AddGroupAsync("Grandparents J").Result;
         (_groupS, _linkS, _groupJ, _linkJ) = (s.Id, s.ShareToken, j.Id, j.ShareToken);
@@ -28,12 +29,11 @@ public sealed class GiftServiceTests : IDisposable
 
     public void Dispose() => _connection.Dispose();
 
-    private async Task<int> AddGift(string title, int? groupId)
-    {
-        var gift = new Gift { KidId = _johnny, Title = title, GroupId = groupId };
-        await _svc.SaveGiftAsync(gift);
-        return gift.Id;
-    }
+    private Task<int> AddGift(string title, int? groupId, decimal? price = null) =>
+        AddGift(title, [_johnny], groupId is null ? [] : [groupId.Value], price);
+
+    private Task<int> AddGift(string title, int[] kids, int[] groups, decimal? price = null) =>
+        _svc.SaveGiftAsync(new GiftEdit { Title = title, KidIds = kids, GroupIds = groups, Price = price });
 
     [Fact]
     public void Each_group_gets_a_distinct_unguessable_link()
@@ -101,7 +101,7 @@ public sealed class GiftServiceTests : IDisposable
         var lego = await AddGift("Lego", _groupS);
         await _svc.MarkPurchasedAsync(lego, _linkS);
 
-        await _svc.SaveGiftAsync(new Gift { Id = lego, KidId = _johnny, Title = "Lego City", GroupId = _groupS });
+        await _svc.SaveGiftAsync(new GiftEdit { Id = lego, KidIds = [_johnny], Title = "Lego City", GroupIds = [_groupS] });
 
         var gift = Assert.Single(await _svc.GetGiftsAsync());
         Assert.Equal("Lego City", gift.Title);
@@ -114,7 +114,7 @@ public sealed class GiftServiceTests : IDisposable
         await AddGift("Lego", _groupS);
         await _svc.DeleteGroupAsync(_groupS);
 
-        Assert.Null(Assert.Single(await _svc.GetGiftsAsync()).GroupId);
+        Assert.Empty(Assert.Single(await _svc.GetGiftsAsync()).Groups);
         Assert.Null(await _svc.GetGroupByTokenAsync(_linkS));
     }
 
@@ -133,8 +133,8 @@ public sealed class GiftServiceTests : IDisposable
     [Fact]
     public async Task Summary_totals_by_group()
     {
-        await _svc.SaveGiftAsync(new Gift { KidId = _johnny, Title = "Lego", Price = 49.99m, GroupId = _groupS });
-        await _svc.SaveGiftAsync(new Gift { KidId = _johnny, Title = "Book", Price = 10m, GroupId = _groupS });
+        await AddGift("Lego", _groupS, 49.99m);
+        await AddGift("Book", _groupS, 10m);
         await AddGift("Puzzle", null);
 
         var summary = await _svc.GetSummaryAsync();
@@ -143,6 +143,62 @@ public sealed class GiftServiceTests : IDisposable
         Assert.Equal(59.99m, s.Total);
         Assert.Equal("Unassigned", summary[^1].Name);
     }
+
+    [Fact]
+    public async Task Gift_offered_to_two_groups_shows_on_both_and_first_buyer_claims_it()
+    {
+        var game = await AddGift("Board game", [_johnny, _lyla], [_groupS, _groupJ]);
+
+        Assert.Single(await _svc.GetGiftsForLinkAsync(_linkS));
+        Assert.Single(await _svc.GetGiftsForLinkAsync(_linkJ));
+
+        Assert.Equal(MarkResult.Ok, await _svc.MarkPurchasedAsync(game, _linkJ));
+        Assert.Equal(MarkResult.AlreadyBought, await _svc.MarkPurchasedAsync(game, _linkS));
+        Assert.False(await _svc.UnmarkPurchasedAsync(game, _linkS)); // only the buyer can undo
+        var gift = Assert.Single(await _svc.GetGiftsAsync());
+        Assert.Equal(_groupJ, gift.PurchasedByGroupId);
+        Assert.True(await _svc.UnmarkPurchasedAsync(game, _linkJ));
+    }
+
+    [Fact]
+    public async Task Gift_for_several_kids_shows_under_each_kid_filter()
+    {
+        await AddGift("Board game", [_johnny, _lyla], [_groupS]);
+        await AddGift("Doll", [_lyla], [_groupS]);
+
+        Assert.Single(await _svc.GetGiftsAsync(_johnny));
+        Assert.Equal(2, (await _svc.GetGiftsAsync(_lyla)).Count);
+    }
+
+    [Fact]
+    public async Task Deleting_a_kid_keeps_gifts_shared_with_other_kids()
+    {
+        await AddGift("Board game", [_johnny, _lyla], [_groupS]);
+        await AddGift("Bike", [_johnny], [_groupS]);
+        await _svc.DeleteKidAsync(_johnny);
+
+        var left = Assert.Single(await _svc.GetGiftsAsync());
+        Assert.Equal("Board game", left.Title);
+        Assert.Equal("Lyla", Assert.Single(left.Kids).Name);
+    }
+
+    [Fact]
+    public async Task Assign_sets_exact_groups()
+    {
+        var lego = await AddGift("Lego", _groupS);
+        await _svc.AssignAsync(lego, [_groupS, _groupJ]);
+        Assert.Equal(2, Assert.Single(await _svc.GetGiftsAsync()).Groups.Count);
+        await _svc.AssignAsync(lego, []);
+        Assert.Empty(Assert.Single(await _svc.GetGiftsAsync()).Groups);
+    }
+
+    [Theory]
+    [InlineData(new[] { "Lyla" }, 3, "Lyla")]
+    [InlineData(new[] { "Lyla", "Greyson" }, 3, "Greyson & Lyla")]
+    [InlineData(new[] { "Lyla", "Greyson", "Ava" }, 4, "Ava, Greyson & Lyla")]
+    [InlineData(new[] { "Lyla", "Greyson" }, 2, "Everyone")]
+    public void Kids_label(string[] names, int total, string expected) =>
+        Assert.Equal(expected, GiftService.KidsLabel(names.Select(n => new Kid { Name = n }), total));
 
     private sealed class TestDbFactory(DbContextOptions<AppDbContext> options) : IDbContextFactory<AppDbContext>
     {
