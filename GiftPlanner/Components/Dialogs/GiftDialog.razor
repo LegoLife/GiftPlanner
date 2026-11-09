@@ -4,6 +4,10 @@
 <MudDialog>
     <TitleContent>@(Gift.Id == 0 ? "Add gift" : "Edit gift")</TitleContent>
     <DialogContent>
+        @if (Notice is not null)
+        {
+            <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-2">@Notice</MudAlert>
+        }
         <MudForm @ref="_form">
             <MudSelect T="int" Label="For" MultiSelection="true" SelectAll="@(Kids.Count > 1)" SelectAllText="Everyone"
                        SelectedValues="Gift.KidIds" SelectedValuesChanged="v => { Gift.KidIds = (v ?? []).ToHashSet(); _kidError = false; }"
@@ -64,6 +68,7 @@
     [Parameter] public GiftEdit Gift { get; set; } = new();
     [Parameter] public List<Kid> Kids { get; set; } = [];
     [Parameter] public List<GiverGroup> Groups { get; set; } = [];
+    [Parameter] public string? Notice { get; set; }
 
     private MudForm _form = null!;
     private bool _kidError;

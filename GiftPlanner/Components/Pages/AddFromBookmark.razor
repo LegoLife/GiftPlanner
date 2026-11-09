@@ -1,0 +1,84 @@
+@page "/add"
+@attribute [Authorize(Roles = Roles.Admin)]
+@using System.Globalization
+@inject GiftService Gifts
+@inject IDialogService DialogService
+@inject IJSRuntime JS
+
+<PageTitle>Add gift · Gift Planner</PageTitle>
+
+@if (_saved is not null)
+{
+    <MudAlert Severity="Severity.Success" Class="mb-3">Added "@_saved" to the list.</MudAlert>
+    <div class="d-flex gap-2">
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="CloseAsync">Close this window</MudButton>
+        <MudButton Variant="Variant.Text" Href="/">Open the list</MudButton>
+    </div>
+}
+else if (_cancelled)
+{
+    <MudText Class="mb-3">Nothing added.</MudText>
+    <MudButton Variant="Variant.Outlined" OnClick="CloseAsync">Close this window</MudButton>
+}
+else if (_kids is { Count: 0 })
+{
+    <MudAlert Severity="Severity.Info">Add your kids on the <MudLink Href="setup">People</MudLink> page first.</MudAlert>
+}
+
+@code {
+    [SupplyParameterFromQuery(Name = "u")] private string? Url { get; set; }
+    [SupplyParameterFromQuery(Name = "t")] private string? Title { get; set; }
+    [SupplyParameterFromQuery(Name = "p")] private string? Price { get; set; }
+    [SupplyParameterFromQuery(Name = "i")] private string? Image { get; set; }
+
+    private List<Kid>? _kids;
+    private string? _saved;
+    private bool _cancelled;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return; // dialogs need the interactive circuit, which exists after the first render
+        _kids = await Gifts.GetKidsAsync();
+        if (_kids.Count == 0) { StateHasChanged(); return; }
+        var groups = await Gifts.GetGroupsAsync();
+
+        var url = SafeHttpUrl(Url);
+        var edit = new GiftEdit
+        {
+            Url = url,
+            Title = ProductLookup.CleanTitle(Title, null) ?? "",
+            Price = ProductLookup.ParsePrice(Price),
+            ImageUrl = url is null ? null : SafeHttpUrl(Image),
+            KidIds = _kids.Count == 1 ? [_kids[0].Id] : [],
+        };
+
+        var already = url is null ? null : await Gifts.FindByUrlAsync(url);
+        var dialog = await DialogService.ShowAsync<GiftDialog>(null,
+            new DialogParameters<GiftDialog>
+            {
+                { d => d.Gift, edit }, { d => d.Kids, _kids }, { d => d.Groups, groups },
+                { d => d.Notice, already is null ? null : $"This link is already on the list as \"{already.Title}\" ({GiftService.KidsLabel(already.Kids, _kids.Count)}). Saving adds it again." },
+            },
+            new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, FullScreen = false, CloseOnEscapeKey = true });
+        var result = await dialog.Result;
+        if (result is null || result.Canceled || result.Data is not GiftEdit saved)
+        {
+            _cancelled = true;
+        }
+        else
+        {
+            await Gifts.SaveGiftAsync(saved);
+            _saved = saved.Title;
+        }
+        StateHasChanged();
+    }
+
+    /// <summary>Only keep http(s) links; anything else from the query string is dropped.</summary>
+    private static string? SafeHttpUrl(string? s) =>
+        Uri.TryCreate(s?.Trim(), UriKind.Absolute, out var u) && u.Scheme is "http" or "https" ? u.ToString() : null;
+
+    private async Task CloseAsync()
+    {
+        try { await JS.InvokeVoidAsync("close"); } catch (JSException) { }
+    }
+}

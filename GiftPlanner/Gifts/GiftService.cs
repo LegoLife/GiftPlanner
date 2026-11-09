@@ -141,6 +141,15 @@ public sealed class GiftService(IDbContextFactory<AppDbContext> dbFactory)
         return edit.Id = entity.Id;
     }
 
+    /// <summary>An active gift with the same link, ignoring the #fragment and a trailing slash.</summary>
+    public async Task<Gift?> FindByUrlAsync(string url)
+    {
+        var key = url.Split('#')[0].TrimEnd('/');
+        await using var db = await dbFactory.CreateDbContextAsync();
+        var candidates = await db.Gifts.Include(g => g.Kids).Where(g => !g.Archived && g.Url != null && g.Url.StartsWith(key)).ToListAsync();
+        return candidates.FirstOrDefault(g => g.Url!.Split('#')[0].TrimEnd('/') == key);
+    }
+
     public async Task SetImageAsync(int giftId, string imageUrl)
     {
         await using var db = await dbFactory.CreateDbContextAsync();

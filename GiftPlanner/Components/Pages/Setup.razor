@@ -68,17 +68,28 @@
     </MudItem>
 </MudGrid>
 
+<MudPaper Outlined="true" Class="pa-4 mt-6">
+    <MudText Typo="Typo.h5" Class="mb-1">Add from any store</MudText>
+    <MudText Typo="Typo.body2" Class="mb-3 mud-text-secondary">
+        Drag this button to your browser's bookmarks bar. On any product page (Target, Best Buy, Amazon…), click it:
+        Gift Planner opens with the name, price and picture filled in from the page you're looking at.
+        It works on a computer where you're signed in here. Show the bookmarks bar with Ctrl+Shift+B (⌘+Shift+B on Mac).
+    </MudText>
+    @((MarkupString)$"<a class=\"bookmarklet\" href=\"{System.Net.WebUtility.HtmlEncode(Bookmarklet.Build(BaseUrl))}\" onclick=\"return false;\" title=\"Drag to your bookmarks bar\">🎁 Add to Gift Planner</a>")
+    <MudText Typo="Typo.caption" Class="d-block mt-2 mud-text-secondary">
+        Can't drag? Right-click the button, choose <i>Bookmark link</i> / <i>Add to favourites</i>.
+    </MudText>
+</MudPaper>
+
 @code {
     private List<Kid> _kids = [];
     private List<GiverGroup> _groups = [];
     private string _newKid = "", _newGroup = "";
 
     /// <summary>GiftPlanner:PublicUrl (e.g. https://gifts.example.com) wins over the address you're browsing from.</summary>
-    private string LinkFor(GiverGroup g)
-    {
-        var baseUrl = Config["GiftPlanner:PublicUrl"] is { Length: > 0 } pub ? pub.TrimEnd('/') + "/" : Nav.BaseUri;
-        return $"{baseUrl}g/{g.ShareToken}";
-    }
+    private string BaseUrl => Config["GiftPlanner:PublicUrl"] is { Length: > 0 } pub ? pub.TrimEnd('/') + "/" : Nav.BaseUri;
+
+    private string LinkFor(GiverGroup g) => $"{BaseUrl}g/{g.ShareToken}";
 
     protected override Task OnInitializedAsync() => LoadAsync();
 

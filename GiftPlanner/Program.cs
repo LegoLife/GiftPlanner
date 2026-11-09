@@ -55,6 +55,8 @@ builder.Services.AddMudServices();
 
 builder.Services.AddDbContextFactory<AppDbContext>(options => options.UseSqlite($"Data Source={dbPath}"));
 builder.Services.AddScoped<GiftService>();
+builder.Services.AddHostedService(sp => new NightlyBackup(dbPath, Path.Combine(dataDir, "backups"),
+    sp.GetRequiredService<ILogger<NightlyBackup>>(), TimeProvider.System));
 builder.Services.AddHttpClient<ProductLookup>(ProductLookup.Configure)
     .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
     {
