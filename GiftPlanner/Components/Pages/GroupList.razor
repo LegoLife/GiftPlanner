@@ -2,8 +2,29 @@
 @attribute [AllowAnonymous]
 @inject GiftService Gifts
 @inject ISnackbar Snackbar
+@inject NavigationManager Nav
+@inject IConfiguration Config
 
 <PageTitle>@(_group is null ? "Gift list" : $"{_group.Name} · Gift list")</PageTitle>
+
+@if (_group is not null)
+{
+    @* Link preview for texts, Facebook, etc. Rendered on the server, so preview bots see it without running scripts. *@
+    <HeadContent>
+        <meta name="description" content="@PreviewText" />
+        <meta property="og:type" content="website" />
+        <meta property="og:site_name" content="Gift Planner" />
+        <meta property="og:title" content="@($"Gift list for {_group.Name}")" />
+        <meta property="og:description" content="@PreviewText" />
+        <meta property="og:url" content="@($"{BaseUrl}g/{Token}")" />
+        <meta property="og:image" content="@($"{BaseUrl}share-preview.png")" />
+        <meta property="og:image:width" content="1200" />
+        <meta property="og:image:height" content="630" />
+        <meta property="og:image:alt" content="A wrapped gift with the words Gift List" />
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="robots" content="noindex, nofollow" />
+    </HeadContent>
+}
 
 @if (!_loaded) { return; }
 
@@ -129,6 +150,20 @@ else
 
     private IEnumerable<Gift> Filtered => _gifts.Where(g =>
         (_kid is null || g.Kids.Any(k => k.Name == _kid)) && (_store is null || g.Store == _store));
+
+    /// <summary>GiftPlanner:PublicUrl wins so previews point at the public address, not the LAN one.</summary>
+    private string BaseUrl => Config["GiftPlanner:PublicUrl"] is { Length: > 0 } pub ? pub.TrimEnd('/') + "/" : Nav.BaseUri;
+
+    private string PreviewText
+    {
+        get
+        {
+            var kids = _gifts.SelectMany(g => g.Kids).Select(k => k.Name).Distinct().Order().ToList();
+            var who = kids.Count == 0 ? "the kids" : kids.Count == 1 ? kids[0] : string.Join(", ", kids[..^1]) + " & " + kids[^1];
+            var open = _gifts.Count(g => g.PurchasedAt is null);
+            return $"Christmas ideas for {who}: {open} gift{(open == 1 ? "" : "s")} set aside for you. Tap to see the list. No sign-in needed.";
+        }
+    }
 
     private static string StoreLabel(string store) => store == Stores.NoLink ? "Anywhere" : store;
 
