@@ -1,0 +1,17 @@
+# GiftPlanner on the Raspberry Pi (prebuilt image, data on the external drive).
+# Lives at ~/giftplanner with .env (password hash) and set-password.sh.
+# Family open per-group share links; for them to work away from home the app must be reachable publicly (see README.md).
+services:
+  giftplanner:
+    image: giftplanner:latest
+    container_name: giftplanner
+    restart: unless-stopped
+    ports:
+      - "8087:8080"
+    environment:
+      GiftPlanner__PasswordHash: ${GIFTPLANNER_PASSWORD_HASH:?Run ./set-password.sh first}
+      # Public address used when building share links, e.g. https://gifts.example.com
+      GiftPlanner__PublicUrl: ${GIFTPLANNER_PUBLIC_URL:-}
+      TZ: America/New_York
+    volumes:
+      - /mnt/data/giftplanner:/data

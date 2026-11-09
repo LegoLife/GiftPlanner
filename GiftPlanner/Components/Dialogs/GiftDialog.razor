@@ -1,0 +1,120 @@
+@implements IDisposable
+@inject ProductLookup Lookup
+
+<MudDialog>
+    <TitleContent>@(Gift.Id == 0 ? "Add gift" : "Edit gift")</TitleContent>
+    <DialogContent>
+        <MudForm @ref="_form">
+            <MudSelect T="int" @bind-Value="Gift.KidId" Label="For" Required="true" RequiredError="Pick a kid">
+                @foreach (var kid in Kids)
+                {
+                    <MudSelectItem Value="kid.Id">@kid.Name</MudSelectItem>
+                }
+            </MudSelect>
+            <MudTextField T="string" Value="Gift.Url" ValueChanged="OnUrlChanged" Label="Paste a link"
+                          HelperText="@_lookupMessage" Immediate="true" DebounceInterval="400"
+                          MaxLength="2000" InputType="InputType.Url" AutoFocus="@(Gift.Id == 0)"
+                          Adornment="Adornment.End" AdornmentIcon="@(_looking ? null : Icons.Material.Filled.Link)" />
+            @if (_looking)
+            {
+                <MudProgressLinear Indeterminate="true" Color="Color.Primary" Class="mt-n1" />
+            }
+            @if (!string.IsNullOrWhiteSpace(Gift.Url))
+            {
+                <div class="link-preview mt-3">
+                    @if (Gift.ImageUrl is not null)
+                    {
+                        <img src="@Gift.ImageUrl" alt="" referrerpolicy="no-referrer" loading="lazy" />
+                    }
+                    <div>
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">@Gift.Store</MudText>
+                        <MudText Typo="Typo.body2"><b>@(string.IsNullOrWhiteSpace(Gift.Title) ? "…" : Gift.Title)</b></MudText>
+                        @if (Gift.Price is not null) { <MudText Typo="Typo.body2">@Gift.Price.Value.ToString("C")</MudText> }
+                    </div>
+                </div>
+            }
+            <MudTextField @bind-Value="Gift.Title" Label="Gift" Required="true" RequiredError="What's the gift?"
+                          MaxLength="300" Immediate="true" />
+            <MudNumericField T="decimal?" @bind-Value="Gift.Price" Label="Price" Min="0" Format="0.00"
+                             Adornment="Adornment.Start" AdornmentText="$" HideSpinButtons="true" />
+            <MudSelect T="int?" @bind-Value="Gift.GroupId" Label="Who buys it" Clearable="true">
+                <MudSelectItem T="int?" Value="null">Unassigned</MudSelectItem>
+                @foreach (var group in Groups)
+                {
+                    <MudSelectItem T="int?" Value="group.Id">@group.Name</MudSelectItem>
+                }
+            </MudSelect>
+            <MudTextField @bind-Value="Gift.Notes" Label="Notes for the giver (size, colour…)" Lines="2" MaxLength="2000" />
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => Dialog.Cancel()">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="SaveAsync" Disabled="_looking">Save</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = null!;
+
+    /// <summary>A detached copy to edit; returned as the dialog result on save.</summary>
+    [Parameter] public Gift Gift { get; set; } = new();
+    [Parameter] public List<Kid> Kids { get; set; } = [];
+    [Parameter] public List<GiverGroup> Groups { get; set; } = [];
+
+    private MudForm _form = null!;
+    private bool _looking;
+    private string? _lookupMessage;
+    private CancellationTokenSource? _cts;
+    // What the last lookup filled in; only those values get replaced if the link changes again,
+    // so anything you typed yourself is never overwritten.
+    private string? _autoTitle;
+    private decimal? _autoPrice;
+
+    private async Task OnUrlChanged(string? url)
+    {
+        Gift.Url = url;
+        _cts?.Cancel();
+        _lookupMessage = null;
+        url = url?.Trim();
+        if (string.IsNullOrEmpty(url)) { Gift.ImageUrl = null; return; }
+        if (!url.Contains("://")) url = "https://" + url;
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) || !uri.Host.Contains('.')) return;
+
+        var cts = _cts = new CancellationTokenSource();
+        _looking = true;
+        StateHasChanged();
+        try
+        {
+            var info = await Lookup.LookupAsync(url, cts.Token);
+            if (cts.IsCancellationRequested) return;
+
+            if (info is null || (info.Title is null && info.Price is null))
+            {
+                _lookupMessage = "Couldn't read that page. Type the name and price in.";
+                return;
+            }
+            if (info.Title is not null && (string.IsNullOrWhiteSpace(Gift.Title) || Gift.Title == _autoTitle))
+                Gift.Title = _autoTitle = info.Title;
+            Gift.ImageUrl = info.ImageUrl; // the picture always follows the link
+            if (info.Price is not null && (Gift.Price is null || Gift.Price == _autoPrice))
+                Gift.Price = _autoPrice = info.Price;
+            _lookupMessage = info.Price is null ? "Got the name. Couldn't find a price." : null;
+        }
+        finally
+        {
+            if (!cts.IsCancellationRequested) _looking = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        await _form.ValidateAsync();
+        if (!_form.IsValid || Gift.KidId == 0) return;
+        if (!string.IsNullOrWhiteSpace(Gift.Url) && !Gift.Url.Contains("://"))
+            Gift.Url = "https://" + Gift.Url.Trim();
+        Dialog.Close(DialogResult.Ok(Gift));
+    }
+
+    public void Dispose() => _cts?.Cancel();
+}

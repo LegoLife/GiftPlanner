@@ -1,0 +1,118 @@
+@page "/g/{Token}"
+@attribute [AllowAnonymous]
+@inject GiftService Gifts
+@inject ISnackbar Snackbar
+
+<PageTitle>@(_group is null ? "Gift list" : $"{_group.Name} · Gift list")</PageTitle>
+
+@if (!_loaded) { return; }
+
+@if (_group is null)
+{
+    <MudAlert Severity="Severity.Warning">
+        This link isn't working. It may have been replaced with a new one. Please ask Jake for the current link.
+    </MudAlert>
+    return;
+}
+
+<MudText Typo="Typo.h4">Gift list for @_group.Name</MudText>
+<MudText Typo="Typo.body1" Class="mb-4 mud-text-secondary">
+    These gifts are set aside just for you, so nobody else will buy them.
+    Once you've bought one, tap <b>I bought this</b> so others in your group don't buy it too.
+</MudText>
+
+@if (_gifts.Count == 0)
+{
+    <MudText>Nothing on your list yet. Check back soon.</MudText>
+}
+
+@foreach (var kid in _gifts.GroupBy(g => g.Kid.Name).OrderBy(x => x.Key))
+{
+<MudText Typo="Typo.h4" Class="mt-6 mb-1 kid-title">For @kid.Key</MudText>
+@foreach (var store in kid.GroupBy(g => g.Store)
+                          .OrderBy(x => x.Key == Stores.NoLink).ThenBy(x => x.Key))
+{
+    <MudText Typo="Typo.h6" Class="mt-3 mb-2 mud-text-secondary">
+        <MudIcon Icon="@Icons.Material.Filled.Storefront" Class="mr-1" Style="vertical-align:-3px" />
+        @(store.Key == Stores.NoLink ? "Anywhere" : store.Key)
+    </MudText>
+    <div class="gift-cards">
+        @foreach (var gift in store)
+        {
+            var bought = gift.PurchasedAt is not null;
+            <MudPaper Outlined="true" Class="@($"gift-card{(bought ? " bought" : "")}")">
+                @if (gift.ImageUrl is not null)
+                {
+                    <a class="gift-card-img" href="@gift.Url" target="_blank" rel="noopener noreferrer">
+                        <img src="@gift.ImageUrl" alt="" referrerpolicy="no-referrer" loading="lazy" />
+                    </a>
+                }
+                <div class="pa-3">
+                    <MudText Typo="Typo.h6" Style="@(bought ? "text-decoration: line-through" : null)">@gift.Title</MudText>
+                    @if (gift.Price is not null)
+                    {
+                        <MudText Typo="Typo.body2">About @gift.Price.Value.ToString("C")</MudText>
+                    }
+                    @if (gift.Notes is not null)
+                    {
+                        <MudText Typo="Typo.body2" Class="mud-text-secondary">@gift.Notes</MudText>
+                    }
+                    <div class="d-flex flex-wrap align-center gap-2 mt-2">
+                        @if (gift.Url is not null)
+                        {
+                            <MudButton Href="@gift.Url" Target="_blank" rel="noopener noreferrer" Variant="Variant.Outlined"
+                                       Size="Size.Small" StartIcon="@Icons.Material.Filled.OpenInNew">View at @gift.Store</MudButton>
+                        }
+                        @if (!bought)
+                        {
+                            <MudButton Variant="Variant.Filled" Color="Color.Secondary" Size="Size.Small"
+                                       StartIcon="@Icons.Material.Filled.Check" OnClick="() => MarkAsync(gift)">I bought this</MudButton>
+                        }
+                        else
+                        {
+                            <MudChip T="string" Color="Color.Success" Size="Size.Small" Icon="@Icons.Material.Filled.Check">Bought</MudChip>
+                            <MudButton Variant="Variant.Text" Size="Size.Small" OnClick="() => UnmarkAsync(gift)">Undo</MudButton>
+                        }
+                    </div>
+                </div>
+            </MudPaper>
+        }
+    </div>
+}
+}
+
+@code {
+    [Parameter] public string Token { get; set; } = "";
+
+    private GiverGroup? _group;
+    private List<Gift> _gifts = [];
+    private bool _loaded;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await LoadAsync();
+        _loaded = true;
+    }
+
+    private async Task LoadAsync()
+    {
+        _group = await Gifts.GetGroupByTokenAsync(Token);
+        _gifts = _group is null ? [] : await Gifts.GetGiftsForLinkAsync(Token);
+    }
+
+    private async Task MarkAsync(Gift gift)
+    {
+        var result = await Gifts.MarkPurchasedAsync(gift.Id, Token);
+        if (result == MarkResult.AlreadyBought)
+            Snackbar.Add("Someone else just marked that one bought.", Severity.Warning);
+        else if (result == MarkResult.Ok)
+            Snackbar.Add($"Marked \"{gift.Title}\" bought. Thank you!", Severity.Success);
+        await LoadAsync();
+    }
+
+    private async Task UnmarkAsync(Gift gift)
+    {
+        await Gifts.UnmarkPurchasedAsync(gift.Id, Token);
+        await LoadAsync();
+    }
+}

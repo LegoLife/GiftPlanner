@@ -1,0 +1,17 @@
+<MudDialog>
+    <DialogContent>
+        <MudTextField @bind-Value="Name" Label="Name" AutoFocus="true" Immediate="true" MaxLength="200"
+                      OnKeyUp="@(e => { if (e.Key == "Enter") Save(); })" />
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => Dialog.Cancel()">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="Save">Save</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = null!;
+    [Parameter] public string Name { get; set; } = "";
+
+    private void Save() => Dialog.Close(DialogResult.Ok(Name.Trim()));
+}

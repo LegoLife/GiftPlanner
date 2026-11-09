@@ -1,0 +1,229 @@
+@page "/"
+@attribute [Authorize(Roles = Roles.Admin)]
+@inject GiftService Gifts
+@inject ProductLookup Lookup
+@implements IDisposable
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<PageTitle>Gifts · Gift Planner</PageTitle>
+
+@if (_kids is null) { return; }
+
+<div class="d-flex flex-wrap align-center gap-3 mb-4">
+    <MudText Typo="Typo.h4" Class="mr-auto">Gift lists</MudText>
+    <MudSwitch @bind-Value="_showBought" Color="Color.Primary" Label="Show what's been bought" />
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
+               OnClick="() => EditAsync(null)" Disabled="_kids.Count == 0">Add gift</MudButton>
+</div>
+
+@if (_kids.Count == 0)
+{
+    <MudAlert Severity="Severity.Info">
+        Start on the <MudLink Href="setup">People</MudLink> page: add your kids and the giver groups (e.g. each set of grandparents). Each group gets its own link to send them.
+    </MudAlert>
+    return;
+}
+
+@* Per-group summary *@
+<div class="summary-grid mb-4">
+    @foreach (var s in _summary)
+    {
+        <MudPaper Class="pa-3" Outlined="true">
+            <MudText Typo="Typo.subtitle2">@s.Name</MudText>
+            <MudText Typo="Typo.body2">
+                @s.Count gift@(s.Count == 1 ? "" : "s")@(s.Total > 0 ? $" · {s.Total:C0}" : "")
+                @if (_showBought) { <span> · @s.Purchased bought</span> }
+            </MudText>
+        </MudPaper>
+    }
+</div>
+
+<MudChipSet T="int?" @bind-SelectedValue="_kidFilter" SelectionMode="SelectionMode.SingleSelection" Class="mb-2">
+    <MudChip T="int?" Value="null" Default="true">Everyone</MudChip>
+    @foreach (var kid in _kids)
+    {
+        <MudChip T="int?" Value="kid.Id">@kid.Name</MudChip>
+    }
+</MudChipSet>
+
+<MudTable Items="Sorted(Visible)" GroupBy="_byKid" Hover="true" Dense="true" Breakpoint="Breakpoint.Sm" Elevation="0" Outlined="true">
+    <GroupHeaderTemplate>
+        <MudTh colspan="6" Class="@(context.GroupName == "Kid" ? "kid-header" : "store-header")">
+            <MudIcon Icon="@(context.GroupName == "Kid" ? Icons.Material.Filled.ChildCare : Icons.Material.Filled.Storefront)"
+                     Size="Size.Small" Class="mr-2" Style="vertical-align:middle" />
+            <b>@context.Key</b> <span class="mud-text-secondary">· @context.Items.Count() gift@(context.Items.Count() == 1 ? "" : "s")@(StoreTotal(context.Items) is > 0 and var t ? $" · {t:C0}" : "")</span>
+        </MudTh>
+    </GroupHeaderTemplate>
+    <HeaderContent>
+        <MudTh></MudTh>
+        <MudTh>Gift</MudTh>
+        <MudTh>Price</MudTh>
+        <MudTh>Who buys it</MudTh>
+        @if (_showBought) { <MudTh>Status</MudTh> }
+        <MudTh></MudTh>
+    </HeaderContent>
+    <RowTemplate>
+        <MudTd Style="width:64px">
+            @if (context.ImageUrl is not null)
+            {
+                <a href="@context.Url" target="_blank" rel="noopener noreferrer">
+                    <img class="gift-thumb" src="@context.ImageUrl" alt="" referrerpolicy="no-referrer" loading="lazy" />
+                </a>
+            }
+        </MudTd>
+        <MudTd DataLabel="Gift">
+            @if (context.Url is not null)
+            {
+                <MudLink Href="@context.Url" Target="_blank" rel="noopener noreferrer">@context.Title</MudLink>
+            }
+            else { @context.Title }
+            @if (context.Notes is not null)
+            {
+                <MudText Typo="Typo.caption" Class="d-block mud-text-secondary">@context.Notes</MudText>
+            }
+        </MudTd>
+        <MudTd DataLabel="Price">@context.Price?.ToString("C")</MudTd>
+        <MudTd DataLabel="Who buys it" Style="min-width:180px">
+            <MudSelect T="int?" Value="context.GroupId" ValueChanged="v => AssignAsync(context, v)"
+                       Dense="true" Margin="Margin.Dense" Variant="Variant.Outlined"
+                       Placeholder="Unassigned" Disabled="@(context.PurchasedAt != null)">
+                <MudSelectItem T="int?" Value="null">Unassigned</MudSelectItem>
+                @foreach (var g in _groups)
+                {
+                    <MudSelectItem T="int?" Value="g.Id">@g.Name</MudSelectItem>
+                }
+            </MudSelect>
+        </MudTd>
+        @if (_showBought)
+        {
+            <MudTd DataLabel="Status">
+                @if (context.PurchasedAt is not null)
+                {
+                    <MudTooltip Text="@($"Marked {context.PurchasedAt.Value.ToLocalTime():MMM d}")">
+                        <MudChip T="string" Size="Size.Small" Color="Color.Success" Icon="@Icons.Material.Filled.Check"
+                                 OnClose="() => ClearAsync(context)">Bought</MudChip>
+                    </MudTooltip>
+                }
+            </MudTd>
+        }
+        <MudTd Style="white-space:nowrap; text-align:right">
+            <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" aria-label="Edit" OnClick="() => EditAsync(context)" />
+            <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" aria-label="Delete" OnClick="() => DeleteAsync(context)" />
+        </MudTd>
+    </RowTemplate>
+    <NoRecordsContent><MudText>No gifts yet. Add one to get started.</MudText></NoRecordsContent>
+</MudTable>
+
+@if (_showBought && _summary.Any(s => s.Purchased > 0))
+{
+    <MudButton Class="mt-4" Variant="Variant.Text" StartIcon="@Icons.Material.Filled.Archive" OnClick="ArchiveAsync">
+        Archive bought gifts (after Christmas)
+    </MudButton>
+}
+
+@code {
+    private List<Kid>? _kids;
+    private List<GiverGroup> _groups = [];
+    private List<Gift> _gifts = [];
+    private List<GroupSummary> _summary = [];
+    private int? _kidFilter;
+    private bool _showBought; // off by default so a kid looking over your shoulder sees nothing
+
+    // Stores A–Z, with link-less gifts last.
+    // Kid first, then store within each kid.
+    private readonly TableGroupDefinition<Gift> _byKid = new()
+    {
+        GroupName = "Kid", Selector = g => g.Kid.Name, Indentation = false,
+        InnerGroup = new TableGroupDefinition<Gift> { GroupName = "Store", Selector = g => g.Store, Indentation = false },
+    };
+    private static decimal StoreTotal(IEnumerable<Gift> gifts) => gifts.Sum(g => g.Price ?? 0);
+
+    private IEnumerable<Gift> Visible => _kidFilter is null ? _gifts : _gifts.Where(g => g.KidId == _kidFilter);
+    private IEnumerable<Gift> Sorted(IEnumerable<Gift> gifts) =>
+        gifts.OrderBy(g => g.Kid.Name).ThenBy(g => g.Store == Stores.NoLink).ThenBy(g => g.Store);
+
+    private readonly CancellationTokenSource _cts = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+        _ = BackfillImagesAsync();
+    }
+
+    /// <summary>Fetches pictures for linked gifts that don't have one yet (e.g. added before pictures existed).</summary>
+    private async Task BackfillImagesAsync()
+    {
+        var found = false;
+        foreach (var gift in _gifts.Where(g => g.Url is not null && g.ImageUrl is null).ToList())
+        {
+            if (_cts.IsCancellationRequested) return;
+            var info = await Lookup.LookupAsync(gift.Url!, _cts.Token);
+            if (info?.ImageUrl is null) continue;
+            await Gifts.SetImageAsync(gift.Id, info.ImageUrl);
+            gift.ImageUrl = info.ImageUrl;
+            found = true;
+        }
+        if (found && !_cts.IsCancellationRequested) await InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose() => _cts.Cancel();
+
+    private async Task LoadAsync()
+    {
+        _kids = await Gifts.GetKidsAsync();
+        _groups = await Gifts.GetGroupsAsync();
+        _gifts = await Gifts.GetGiftsAsync();
+        _summary = await Gifts.GetSummaryAsync();
+    }
+
+    private async Task EditAsync(Gift? gift)
+    {
+        var copy = gift is null
+            ? new Gift { KidId = _kidFilter ?? (_kids!.Count == 1 ? _kids[0].Id : 0) }
+            : new Gift { Id = gift.Id, KidId = gift.KidId, Title = gift.Title, Url = gift.Url, ImageUrl = gift.ImageUrl, Price = gift.Price, Notes = gift.Notes, GroupId = gift.GroupId };
+        var dialog = await DialogService.ShowAsync<GiftDialog>(null,
+            new DialogParameters<GiftDialog> { { d => d.Gift, copy }, { d => d.Kids, _kids! }, { d => d.Groups, _groups } },
+            new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
+        var result = await dialog.Result;
+        if (result is null || result.Canceled || result.Data is not Gift edited) return;
+        await Gifts.SaveGiftAsync(edited);
+        await LoadAsync();
+    }
+
+    private async Task AssignAsync(Gift gift, int? groupId)
+    {
+        await Gifts.AssignAsync(gift.Id, groupId);
+        await LoadAsync();
+    }
+
+    private async Task DeleteAsync(Gift gift)
+    {
+        var ok = await DialogService.ShowMessageBoxAsync("Delete gift", $"Delete \"{gift.Title}\" from {gift.Kid.Name}'s list?",
+            yesText: "Delete", cancelText: "Cancel");
+        if (ok != true) return;
+        await Gifts.DeleteGiftAsync(gift.Id);
+        await LoadAsync();
+    }
+
+    private async Task ClearAsync(Gift gift)
+    {
+        var ok = await DialogService.ShowMessageBoxAsync("Mark as not bought",
+            $"Clear the \"bought\" mark on \"{gift.Title}\"? Givers will be able to claim it again.",
+            yesText: "Clear", cancelText: "Cancel");
+        if (ok != true) return;
+        await Gifts.ClearPurchasedAsync(gift.Id);
+        await LoadAsync();
+    }
+
+    private async Task ArchiveAsync()
+    {
+        var ok = await DialogService.ShowMessageBoxAsync("Archive bought gifts",
+            "Hide every bought gift from all lists? Use this after Christmas so next year starts fresh.",
+            yesText: "Archive", cancelText: "Cancel");
+        if (ok != true) return;
+        var n = await Gifts.ArchivePurchasedAsync();
+        Snackbar.Add($"Archived {n} gift{(n == 1 ? "" : "s")}", Severity.Info);
+        await LoadAsync();
+    }
+}

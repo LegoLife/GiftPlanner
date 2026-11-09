@@ -1,0 +1,172 @@
+@page "/setup"
+@attribute [Authorize(Roles = Roles.Admin)]
+@inject GiftService Gifts
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+@inject NavigationManager Nav
+@inject IConfiguration Config
+@inject IJSRuntime JS
+
+<PageTitle>People · Gift Planner</PageTitle>
+
+<MudGrid>
+    <MudItem xs="12" md="4">
+        <MudText Typo="Typo.h5" Class="mb-3">Kids</MudText>
+        <MudPaper Outlined="true" Class="pa-3">
+            @foreach (var kid in _kids)
+            {
+                <div class="d-flex align-center gap-1">
+                    <MudText Class="mr-auto">@kid.Name</MudText>
+                    <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" aria-label="Rename"
+                                   OnClick="() => RenameKidAsync(kid)" />
+                    <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" aria-label="Delete"
+                                   OnClick="() => DeleteKidAsync(kid)" />
+                </div>
+            }
+            <div class="d-flex align-end gap-2 mt-2">
+                <MudTextField @bind-Value="_newKid" Label="Add a kid" Immediate="true" OnKeyUp="e => OnEnter(e, AddKidAsync)" />
+                <MudIconButton Icon="@Icons.Material.Filled.Add" Color="Color.Primary" aria-label="Add kid" OnClick="AddKidAsync" />
+            </div>
+        </MudPaper>
+    </MudItem>
+
+    <MudItem xs="12" md="8">
+        <MudText Typo="Typo.h5" Class="mb-1">Giver groups</MudText>
+        <MudText Typo="Typo.body2" Class="mb-3 mud-text-secondary">
+            Each group has its own private link that shows only the gifts you assign to it. Send each group
+            their link (text or email). No sign-in needed. Anyone with a link can see that group's list, so
+            only send it to that group. If a link gets shared too widely, reset it.
+        </MudText>
+        @foreach (var group in _groups)
+        {
+            var link = LinkFor(group);
+            <MudPaper Outlined="true" Class="pa-3 mb-3">
+                <div class="d-flex align-center gap-1">
+                    <MudText Typo="Typo.h6" Class="mr-auto">@group.Name</MudText>
+                    <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" aria-label="Rename"
+                                   OnClick="() => RenameGroupAsync(group)" />
+                    <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" aria-label="Delete"
+                                   OnClick="() => DeleteGroupAsync(group)" />
+                </div>
+                <div class="d-flex flex-wrap align-center gap-2 mt-2">
+                    <MudTextField Value="link" ReadOnly="true" Variant="Variant.Outlined" Margin="Margin.Dense"
+                                  Class="flex-grow-1" Style="min-width:240px; font-family:monospace; font-size:.85rem" />
+                    <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary"
+                               StartIcon="@Icons.Material.Filled.ContentCopy" OnClick="() => CopyAsync(link)">Copy</MudButton>
+                    <MudButton Size="Size.Small" Variant="Variant.Outlined" Href="@link" Target="_blank"
+                               StartIcon="@Icons.Material.Filled.Visibility">Preview</MudButton>
+                    <MudButton Size="Size.Small" Variant="Variant.Text" StartIcon="@Icons.Material.Filled.Refresh"
+                               OnClick="() => ResetLinkAsync(group)">Reset link</MudButton>
+                </div>
+            </MudPaper>
+        }
+        <div class="d-flex align-end gap-2">
+            <MudTextField @bind-Value="_newGroup" Label="New group (e.g. Grandma & Grandpa S)" Immediate="true"
+                          OnKeyUp="e => OnEnter(e, AddGroupAsync)" />
+            <MudIconButton Icon="@Icons.Material.Filled.GroupAdd" Color="Color.Primary" aria-label="Add group" OnClick="AddGroupAsync" />
+        </div>
+    </MudItem>
+</MudGrid>
+
+@code {
+    private List<Kid> _kids = [];
+    private List<GiverGroup> _groups = [];
+    private string _newKid = "", _newGroup = "";
+
+    /// <summary>GiftPlanner:PublicUrl (e.g. https://gifts.example.com) wins over the address you're browsing from.</summary>
+    private string LinkFor(GiverGroup g)
+    {
+        var baseUrl = Config["GiftPlanner:PublicUrl"] is { Length: > 0 } pub ? pub.TrimEnd('/') + "/" : Nav.BaseUri;
+        return $"{baseUrl}g/{g.ShareToken}";
+    }
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _kids = await Gifts.GetKidsAsync();
+        _groups = await Gifts.GetGroupsAsync();
+    }
+
+    private static async Task OnEnter(KeyboardEventArgs e, Func<Task> action)
+    {
+        if (e.Key == "Enter") await action();
+    }
+
+    private async Task CopyAsync(string link)
+    {
+        var ok = await JS.InvokeAsync<bool>("gpCopy", link);
+        Snackbar.Add(ok ? "Link copied" : "Couldn't copy automatically. Select the link and copy it.",
+            ok ? Severity.Success : Severity.Warning);
+    }
+
+    private async Task AddKidAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_newKid)) return;
+        await Gifts.AddKidAsync(_newKid);
+        _newKid = "";
+        await LoadAsync();
+    }
+
+    private async Task RenameKidAsync(Kid kid)
+    {
+        var name = await PromptAsync("Rename kid", kid.Name);
+        if (name is null) return;
+        await Gifts.RenameKidAsync(kid.Id, name);
+        await LoadAsync();
+    }
+
+    private async Task DeleteKidAsync(Kid kid)
+    {
+        var ok = await DialogService.ShowMessageBoxAsync("Delete kid",
+            $"Delete {kid.Name} and their whole gift list?", yesText: "Delete", cancelText: "Cancel");
+        if (ok != true) return;
+        await Gifts.DeleteKidAsync(kid.Id);
+        await LoadAsync();
+    }
+
+    private async Task AddGroupAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_newGroup)) return;
+        await Gifts.AddGroupAsync(_newGroup);
+        _newGroup = "";
+        await LoadAsync();
+    }
+
+    private async Task RenameGroupAsync(GiverGroup group)
+    {
+        var name = await PromptAsync("Rename group", group.Name);
+        if (name is null) return;
+        await Gifts.RenameGroupAsync(group.Id, name);
+        await LoadAsync();
+    }
+
+    private async Task DeleteGroupAsync(GiverGroup group)
+    {
+        var ok = await DialogService.ShowMessageBoxAsync("Delete group",
+            $"Delete \"{group.Name}\"? Its gifts become unassigned and its link stops working.",
+            yesText: "Delete", cancelText: "Cancel");
+        if (ok != true) return;
+        await Gifts.DeleteGroupAsync(group.Id);
+        await LoadAsync();
+    }
+
+    private async Task ResetLinkAsync(GiverGroup group)
+    {
+        var ok = await DialogService.ShowMessageBoxAsync("Reset link",
+            $"Make a new link for \"{group.Name}\"? The old link stops working, so you'll need to send them the new one.",
+            yesText: "Reset", cancelText: "Cancel");
+        if (ok != true) return;
+        await Gifts.ResetLinkAsync(group.Id);
+        await LoadAsync();
+    }
+
+    private async Task<string?> PromptAsync(string title, string current)
+    {
+        var dialog = await DialogService.ShowAsync<NameDialog>(title,
+            new DialogParameters<NameDialog> { { d => d.Name, current } },
+            new DialogOptions { MaxWidth = MaxWidth.ExtraSmall, FullWidth = true });
+        var result = await dialog.Result;
+        return result is { Canceled: false, Data: string s } && !string.IsNullOrWhiteSpace(s) ? s : null;
+    }
+}

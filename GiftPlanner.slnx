@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="GiftPlanner.Tests/GiftPlanner.Tests.csproj" />
+  <Project Path="GiftPlanner/GiftPlanner.csproj" />
+</Solution>
