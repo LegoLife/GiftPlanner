@@ -25,8 +25,40 @@
 {
     <MudText>Nothing on your list yet. Check back soon.</MudText>
 }
+else
+{
+    var kids = _gifts.Select(g => g.Kid.Name).Distinct().Order().ToList();
+    var stores = _gifts.Select(g => g.Store).Distinct().OrderBy(x => x == Stores.NoLink).ThenBy(x => x).ToList();
+    @if (kids.Count > 1)
+    {
+        <div class="filter-row">
+            <MudText Typo="Typo.subtitle2" Class="filter-label">Child</MudText>
+            <MudChipSet T="string" @bind-SelectedValue="_kid" SelectionMode="SelectionMode.ToggleSelection" Color="Color.Primary" Variant="Variant.Outlined">
+                @foreach (var k in kids) { <MudChip T="string" Value="k" Icon="@Icons.Material.Filled.ChildCare">@k</MudChip> }
+            </MudChipSet>
+        </div>
+    }
+    @if (stores.Count > 1)
+    {
+        <div class="filter-row">
+            <MudText Typo="Typo.subtitle2" Class="filter-label">Store</MudText>
+            <MudChipSet T="string" @bind-SelectedValue="_store" SelectionMode="SelectionMode.ToggleSelection" Color="Color.Secondary" Variant="Variant.Outlined">
+                @foreach (var st in stores) { <MudChip T="string" Value="st" Icon="@Icons.Material.Filled.Storefront">@StoreLabel(st)</MudChip> }
+            </MudChipSet>
+        </div>
+    }
+    @if (_kid is not null || _store is not null)
+    {
+        <MudButton Variant="Variant.Text" Size="Size.Small" StartIcon="@Icons.Material.Filled.FilterAltOff"
+                   OnClick="() => { _kid = null; _store = null; }">Show everything</MudButton>
+    }
+    @if (!Filtered.Any())
+    {
+        <MudText Class="mt-4">Nothing matches that filter.</MudText>
+    }
+}
 
-@foreach (var kid in _gifts.GroupBy(g => g.Kid.Name).OrderBy(x => x.Key))
+@foreach (var kid in Filtered.GroupBy(g => g.Kid.Name).OrderBy(x => x.Key))
 {
 <MudText Typo="Typo.h4" Class="mt-6 mb-1 kid-title">For @kid.Key</MudText>
 @foreach (var store in kid.GroupBy(g => g.Store)
@@ -34,7 +66,7 @@
 {
     <MudText Typo="Typo.h6" Class="mt-3 mb-2 mud-text-secondary">
         <MudIcon Icon="@Icons.Material.Filled.Storefront" Class="mr-1" Style="vertical-align:-3px" />
-        @(store.Key == Stores.NoLink ? "Anywhere" : store.Key)
+        @StoreLabel(store.Key)
     </MudText>
     <div class="gift-cards">
         @foreach (var gift in store)
@@ -87,6 +119,12 @@
     private GiverGroup? _group;
     private List<Gift> _gifts = [];
     private bool _loaded;
+    private string? _kid, _store; // null = show all
+
+    private IEnumerable<Gift> Filtered => _gifts.Where(g =>
+        (_kid is null || g.Kid.Name == _kid) && (_store is null || g.Store == _store));
+
+    private static string StoreLabel(string store) => store == Stores.NoLink ? "Anywhere" : store;
 
     protected override async Task OnParametersSetAsync()
     {

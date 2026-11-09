@@ -90,3 +90,5 @@ h1:focus {
 .store-header { background: var(--mud-palette-background-gray); }
 .kid-header { background: var(--mud-palette-primary); color: var(--mud-palette-primary-text) !important; font-size: 1rem; }
 .kid-title { border-bottom: 2px solid var(--mud-palette-primary); padding-bottom: 4px; }
+.filter-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+.filter-label { min-width: 48px; }
