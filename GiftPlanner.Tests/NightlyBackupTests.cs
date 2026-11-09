@@ -46,14 +46,14 @@ public sealed class NightlyBackupTests : IDisposable
     }
 
     [Fact]
-    public void Keeps_only_the_newest_fourteen()
+    public void Keeps_only_the_newest_two()
     {
         var start = new DateOnly(2026, 12, 1);
         for (var d = 0; d < 20; d++) _backup.BackupNow(start.AddDays(d));
 
         var files = Directory.GetFiles(Path.Combine(_dir, "backups")).Select(Path.GetFileName).Order().ToList();
         Assert.Equal(NightlyBackup.Keep, files.Count);
-        Assert.Equal("giftplanner-2026-12-07.db", files[0]);
+        Assert.Equal("giftplanner-2026-12-19.db", files[0]);
         Assert.Equal("giftplanner-2026-12-20.db", files[^1]);
     }
 }

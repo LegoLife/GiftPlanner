@@ -4,11 +4,11 @@ namespace GiftPlanner.Data;
 
 /// <summary>
 /// Copies the database to {data}/backups/giftplanner-YYYY-MM-DD.db once a day (at startup if today's is missing,
-/// then around 3 AM) and keeps the newest <see cref="Keep"/>. Uses SQLite's online backup, so it's safe while the app runs.
+/// then around 3 AM) and keeps the newest <see cref="Keep"/> (two days). Uses SQLite's online backup, so it's safe while the app runs.
 /// </summary>
 public sealed class NightlyBackup(string dbPath, string backupDir, ILogger<NightlyBackup> log, TimeProvider clock) : BackgroundService
 {
-    public const int Keep = 14;
+    public const int Keep = 2;
     private static readonly TimeSpan RunAt = TimeSpan.FromHours(3);
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
