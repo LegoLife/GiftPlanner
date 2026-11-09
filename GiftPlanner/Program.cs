@@ -18,6 +18,15 @@ if (args is ["hash-password", .. var rest])
     return 0;
 }
 
+// The container has no locale, so .NET would format prices with the generic "¤" sign. Always use US dollars.
+var usCulture = (System.Globalization.CultureInfo)System.Globalization.CultureInfo.InvariantCulture.Clone();
+usCulture.NumberFormat.CurrencySymbol = "$";
+usCulture.NumberFormat.CurrencyPositivePattern = 0; // $1.00
+usCulture.NumberFormat.CurrencyNegativePattern = 1; // -$1.00
+System.Globalization.CultureInfo.DefaultThreadCurrentCulture = usCulture;
+System.Globalization.CultureInfo.DefaultThreadCurrentUICulture = usCulture;
+System.Globalization.CultureInfo.CurrentCulture = usCulture;
+
 var builder = WebApplication.CreateBuilder(args);
 
 var dataDir = builder.Configuration["GiftPlanner:DataDirectory"] ?? builder.Environment.ContentRootPath;
