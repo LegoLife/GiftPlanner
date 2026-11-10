@@ -1,0 +1,145 @@
+@page "/import"
+@attribute [Authorize(Roles = Roles.Admin)]
+@inject GiftService Gifts
+@inject ProductLookup Lookup
+
+<PageTitle>Bulk import · Gift Planner</PageTitle>
+
+<MudText Typo="Typo.h5" Class="mb-1">Bulk import</MudText>
+<MudText Typo="Typo.body2" Class="mb-3 mud-text-secondary">
+    Paste product links, one per line. Each one is looked up for its name, price and picture, then added for the kids you pick.
+    Anything that can't be read is still added, with a placeholder name you can fix afterwards.
+</MudText>
+
+<MudPaper Outlined="true" Class="pa-4">
+    <MudTextField @bind-Value="_text" Label="Links (one per line)" Lines="10" Variant="Variant.Outlined"
+                  Disabled="_running" Immediate="true" />
+    <div class="d-flex flex-wrap gap-4 mt-3">
+        <MudSelect T="int" Label="For which kids" MultiSelection="true" SelectAll="@(_kids.Count > 1)" SelectAllText="All kids"
+                   SelectedValues="_kidIds" SelectedValuesChanged="v => _kidIds = (v ?? []).ToHashSet()"
+                   Disabled="_running" Style="min-width:240px">
+            @foreach (var k in _kids) { <MudSelectItem Value="k.Id">@k.Name</MudSelectItem> }
+        </MudSelect>
+        <MudSelect T="int" Label="Who buys it (optional)" MultiSelection="true" SelectAll="@(_groups.Count > 1)" SelectAllText="Any group"
+                   SelectedValues="_groupIds" SelectedValuesChanged="v => _groupIds = (v ?? []).ToHashSet()"
+                   Placeholder="Unassigned" Disabled="_running" Style="min-width:240px">
+            @foreach (var g in _groups) { <MudSelectItem Value="g.Id">@g.Name</MudSelectItem> }
+        </MudSelect>
+    </div>
+    <MudCheckBox @bind-Value="_skipDupes" Label="Skip links already on the list" Disabled="_running" Class="mt-2" />
+    <div class="d-flex align-center gap-3 mt-2">
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.PlaylistAdd"
+                   OnClick="RunAsync" Disabled="@(_running || _kidIds.Count == 0 || Urls().Count == 0)">
+            Import @Urls().Count link@(Urls().Count == 1 ? "" : "s")
+        </MudButton>
+        @if (_kidIds.Count == 0) { <MudText Typo="Typo.caption" Class="mud-text-secondary">Pick at least one kid.</MudText> }
+    </div>
+    @if (_running) { <MudProgressLinear Value="@_done" Max="@_rows.Count" Color="Color.Primary" Class="mt-3" /> }
+</MudPaper>
+
+@if (_rows.Count > 0)
+{
+    <MudSimpleTable Dense="true" Class="mt-4">
+        <tbody>
+            @foreach (var r in _rows)
+            {
+                <tr>
+                    <td style="width:32px">
+                        @switch (r.Status)
+                        {
+                            case "added": <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Color="Color.Success" Size="Size.Small" />; break;
+                            case "check": <MudIcon Icon="@Icons.Material.Filled.Warning" Color="Color.Warning" Size="Size.Small" />; break;
+                            case "skipped": <MudIcon Icon="@Icons.Material.Filled.SkipNext" Size="Size.Small" />; break;
+                            case "bad": <MudIcon Icon="@Icons.Material.Filled.Error" Color="Color.Error" Size="Size.Small" />; break;
+                            default: <MudProgressCircular Indeterminate="@(r.Status == "working")" Size="Size.Small" />; break;
+                        }
+                    </td>
+                    <td>
+                        <MudText Typo="Typo.body2">@(r.Title ?? r.Url)</MudText>
+                        @if (r.Message is not null) { <MudText Typo="Typo.caption" Class="mud-text-secondary">@r.Message</MudText> }
+                    </td>
+                    <td style="white-space:nowrap">@r.Price?.ToString("C")</td>
+                </tr>
+            }
+        </tbody>
+    </MudSimpleTable>
+    @if (!_running) { <MudButton Href="/" Variant="Variant.Text" Class="mt-2">Back to the list</MudButton> }
+}
+
+@code {
+    private sealed class Row(string url)
+    {
+        public string Url { get; } = url;
+        public string? Title, Message, Status;
+        public decimal? Price;
+    }
+
+    private List<Kid> _kids = [];
+    private List<GiverGroup> _groups = [];
+    private IReadOnlyCollection<int> _kidIds = [], _groupIds = [];
+    private string _text = "";
+    private bool _running, _skipDupes = true;
+    private int _done;
+    private List<Row> _rows = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        _kids = await Gifts.GetKidsAsync();
+        _groups = await Gifts.GetGroupsAsync();
+        if (_kids.Count == 1) _kidIds = [_kids[0].Id];
+    }
+
+    /// <summary>Every http(s) link in the box, in order, without repeats. Bare "amazon.com/..." gets https://.</summary>
+    private List<string> Urls() => _text.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+        .Select(l => l.Contains("://") ? l : "https://" + l)
+        .Where(l => Uri.TryCreate(l, UriKind.Absolute, out var u) && u.Scheme is "http" or "https" && u.Host.Contains('.'))
+        .Distinct().ToList();
+
+    private async Task RunAsync()
+    {
+        _rows = Urls().Select(u => new Row(u)).ToList();
+        _running = true; _done = 0;
+        foreach (var r in _rows)
+        {
+            r.Status = "working";
+            StateHasChanged();
+            try
+            {
+                if (_skipDupes && await Gifts.FindByUrlAsync(r.Url) is { } existing)
+                {
+                    r.Status = "skipped"; r.Title = existing.Title; r.Message = "Already on the list";
+                    continue;
+                }
+                ProductInfo? info = null;
+                try
+                {
+                    using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+                    info = await Lookup.LookupAsync(r.Url, cts.Token);
+                }
+                catch (Exception ex) when (ex is OperationCanceledException or HttpRequestException) { }
+
+                var store = Stores.FromUrl(r.Url);
+                r.Title = info?.Title ?? $"Item from {store}";
+                r.Price = info?.Price;
+                await Gifts.SaveGiftAsync(new GiftEdit
+                {
+                    Url = r.Url, Title = r.Title, Price = r.Price, ImageUrl = info?.ImageUrl,
+                    KidIds = _kidIds.ToList(), GroupIds = _groupIds.ToList(),
+                });
+                (r.Status, r.Message) = (info?.Title, r.Price) switch
+                {
+                    (null, _) => ("check", "Couldn't read the page. Added with a placeholder name, edit it on the list."),
+                    (_, null) => ("check", "Added. Couldn't find a price."),
+                    _ => ("added", null),
+                };
+            }
+            catch (Exception ex)
+            {
+                r.Status = "bad"; r.Message = "Failed: " + ex.Message;
+            }
+            finally { _done++; }
+        }
+        _running = false;
+        _text = "";
+    }
+}

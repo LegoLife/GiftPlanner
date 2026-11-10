@@ -14,6 +14,7 @@
         <AuthorizeView Roles="@Roles.Admin">
             <MudButton Href="/" Color="Color.Inherit" StartIcon="@Icons.Material.Filled.ListAlt">Gifts</MudButton>
             <MudButton Href="setup" Color="Color.Inherit" StartIcon="@Icons.Material.Filled.Groups">People</MudButton>
+            <MudButton Href="import" Color="Color.Inherit" StartIcon="@Icons.Material.Filled.PlaylistAdd">Import</MudButton>
         </AuthorizeView>
         <MudTooltip Text="@(_dark ? "Light mode" : "Dark mode")">
             <MudIconButton Icon="@(_dark ? Icons.Material.Filled.LightMode : Icons.Material.Filled.DarkMode)"
