@@ -28,7 +28,9 @@ public static partial class Bookmarklet
         p=p||m('product:price:amount')||m('og:price:amount')||m('price')
           ||txt('[data-test="product-price"]')||txt('#corePrice_feature_div .a-offscreen')||txt('.priceToPay .a-offscreen')
           ||txt('[data-testid="customer-price"] span')||txt('.priceView-customer-price span')||txt('[itemprop="price"]');
-        t=t||m('og:title')||txt('h1')||document.title;
+        const h1=()=>{for(const e of document.querySelectorAll('h1')){if(e.closest('aside,dialog,nav,header,[role=dialog],[aria-hidden=true],[id*=chat i],[class*=chat i],[id*=rufus i],[class*=rufus i]'))continue;
+          const r=e.getBoundingClientRect(),s=e.textContent.trim();if(s&&r.width>0&&r.height>0&&!/chat|history|assistant/i.test(s))return s}};
+        t=t||txt('#productTitle')||txt('#title')||m('og:title')||txt('[data-test="product-title"]')||txt('[itemprop="name"]')||h1()||document.title;
         i=i||m('og:image')||(q('#landingImage')||{}).src;
         const pm=String(p||'').replace(/,/g,'').match(/\d+(\.\d+)?/);
         const P=new URLSearchParams({u:location.href.split('#')[0],t:t||'',p:pm?pm[0]:'',i:typeof i==='string'?i:''});
