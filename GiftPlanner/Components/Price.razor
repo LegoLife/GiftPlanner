@@ -1,0 +1,12 @@
+@* Store-style price: small superscript $ and cents, e.g. $19⁹⁸ *@
+@if (Value is { } v)
+{
+    var dollars = Math.Floor(v);
+    var cents = (int)Math.Round((v - dollars) * 100);
+    <span class="az-price" aria-label="@v.ToString("C")">@if (Approx) {<span class="az-approx">~</span>}<sup>$</sup>@dollars.ToString("N0")<sup>@cents.ToString("00")</sup></span>
+}
+
+@code {
+    [Parameter] public decimal? Value { get; set; }
+    [Parameter] public bool Approx { get; set; }
+}

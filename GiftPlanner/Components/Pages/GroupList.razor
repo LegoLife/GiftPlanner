@@ -36,11 +36,14 @@
     return;
 }
 
-<MudText Typo="Typo.h4">Gift list for @_group.Name</MudText>
-<MudText Typo="Typo.body1" Class="mb-4 mud-text-secondary">
-    These gifts are set aside just for you, so nobody else will buy them.
-    Once you've bought one, tap <b>I bought this</b> so others in your group don't buy it too.
-</MudText>
+<header class="gp-hero">
+    <span class="gp-eyebrow">A private list for</span>
+    <h1 class="gp-display"><em>@_group.Name</em></h1>
+    <p class="gp-lede">
+        These gifts are set aside just for you, so nobody else will buy them.
+        Once you've bought one, tap <b>I bought this</b> so others in your group don't buy it too.
+    </p>
+</header>
 
 @if (_gifts.Count == 0)
 {
@@ -50,6 +53,9 @@ else
 {
     var kids = _gifts.SelectMany(g => g.Kids).Select(k => k.Name).Distinct().Order().ToList();
     var stores = _gifts.Select(g => g.Store).Distinct().OrderBy(x => x == Stores.NoLink).ThenBy(x => x).ToList();
+    @if (kids.Count > 1 || stores.Count > 1)
+    {
+    <div class="filters">
     @if (kids.Count > 1)
     {
         <div class="filter-row">
@@ -73,6 +79,8 @@ else
         <MudButton Variant="Variant.Text" Size="Size.Small" StartIcon="@Icons.Material.Filled.FilterAltOff"
                    OnClick="() => { _kid = null; _store = null; }">Show everything</MudButton>
     }
+    </div>
+    }
     @if (!Filtered.Any())
     {
         <MudText Class="mt-4">Nothing matches that filter.</MudText>
@@ -82,14 +90,14 @@ else
 @foreach (var kid in Filtered.GroupBy(g => GiftService.KidsLabel(g.Kids, _totalKids))
                              .OrderBy(x => x.First().Kids.Count > 1).ThenBy(x => x.Key == "Everyone").ThenBy(x => x.Key))
 {
-<MudText Typo="Typo.h4" Class="mt-6 mb-1 kid-title">For @kid.Key</MudText>
+<h2 class="kid-title">For <em>@kid.Key</em></h2>
 @foreach (var store in kid.GroupBy(g => g.Store)
                           .OrderBy(x => x.Key == Stores.NoLink).ThenBy(x => x.Key))
 {
-    <MudText Typo="Typo.h6" Class="mt-3 mb-2 mud-text-secondary">
-        <MudIcon Icon="@Icons.Material.Filled.Storefront" Class="mr-1" Style="vertical-align:-3px" />
+    <div class="store-label">
+        <MudIcon Icon="@Icons.Material.Filled.Storefront" Size="Size.Small" />
         @StoreLabel(store.Key)
-    </MudText>
+    </div>
     <div class="gift-cards compact">
         @foreach (var gift in store)
         {
@@ -101,17 +109,17 @@ else
                         <img src="@gift.ImageUrl" alt="" referrerpolicy="no-referrer" loading="lazy" />
                     </a>
                 }
-                <div class="pa-2">
-                    <MudText Typo="Typo.subtitle2" Class="clamp-2" title="@gift.Title" Style="@(bought ? "text-decoration: line-through" : null)">@gift.Title</MudText>
+                <div class="gift-card-body">
+                    <div class="gift-card-title clamp-2" title="@gift.Title" style="@(bought ? "text-decoration: line-through" : null)">@gift.Title</div>
                     @if (gift.Price is not null)
                     {
-                        <MudText Typo="Typo.body2">About @gift.Price.Value.ToString("C")</MudText>
+                        <div class="gift-card-price"><Price Value="gift.Price" Approx="true" /></div>
                     }
                     @if (gift.Notes is not null)
                     {
-                        <MudText Typo="Typo.body2" Class="mud-text-secondary">@gift.Notes</MudText>
+                        <div class="gift-card-notes">@gift.Notes</div>
                     }
-                    <div class="d-flex flex-wrap align-center gap-2 mt-2">
+                    <div class="gift-card-actions">
                         @if (gift.Url is not null)
                         {
                             <MudButton Href="@gift.Url" Target="_blank" rel="noopener noreferrer" Variant="Variant.Outlined"

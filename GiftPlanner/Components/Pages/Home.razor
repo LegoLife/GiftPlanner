@@ -10,12 +10,14 @@
 
 @if (_kids is null) { return; }
 
-<div class="d-flex flex-wrap align-center gap-3 mb-4">
-    <MudText Typo="Typo.h4" Class="mr-auto">Gift lists</MudText>
-    <MudSwitch @bind-Value="_showBought" Color="Color.Primary" Label="Show what's been bought" />
+<header class="gp-head">
+    <div>
+        <span class="gp-eyebrow">Christmas @DateTime.Now.Year</span>
+        <h1 class="gp-title">Gift <em>lists</em></h1>
+    </div>
     <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
                OnClick="() => EditAsync(null)" Disabled="_kids.Count == 0">Add gift</MudButton>
-</div>
+</header>
 
 @if (_kids.Count == 0)
 {
@@ -25,100 +27,124 @@
     return;
 }
 
-@* Per-group summary *@
-<div class="summary-grid mb-4">
+@* One strip: overall totals, then each giver group *@
+<section class="gp-strip">
+    <div class="gp-strip-cell gp-strip-lead">
+        <span class="gp-strip-label">All gifts</span>
+        <span class="gp-strip-num">@_gifts.Count</span>
+        <span class="gp-strip-meta">@(_gifts.Sum(g => g.Price ?? 0).ToString("C0")) planned</span>
+    </div>
     @foreach (var s in _summary)
     {
-        <MudPaper Class="pa-3" Outlined="true">
-            <MudText Typo="Typo.subtitle2">@s.Name</MudText>
-            <MudText Typo="Typo.body2">
-                @s.Count gift@(s.Count == 1 ? "" : "s")@(s.Total > 0 ? $" · {s.Total:C0}" : "")
-                @if (_showBought) { <span> · @s.Purchased bought</span> }
-            </MudText>
-        </MudPaper>
+        <div class="gp-strip-cell">
+            <span class="gp-strip-label">@s.Name</span>
+            <span class="gp-strip-num">@s.Count</span>
+            <span class="gp-strip-meta">@(s.Total > 0 ? s.Total.ToString("C0") : "—")@(_showBought ? $" · {s.Purchased} bought" : "")</span>
+            @if (_showBought)
+            {
+                <div class="gp-progress"><span style="width:@(s.Count == 0 ? 0 : s.Purchased * 100 / s.Count)%"></span></div>
+            }
+        </div>
     }
+</section>
+
+<div class="gp-controls">
+    <MudTextField @bind-Value="_search" Placeholder="Search gifts" Immediate="true" DebounceInterval="150"
+                  Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" Clearable="true"
+                  Variant="Variant.Outlined" Margin="Margin.Dense" Class="gp-search" />
+    <MudChipSet T="int?" @bind-SelectedValue="_kidFilter" SelectionMode="SelectionMode.SingleSelection" Class="gp-chips">
+        <MudChip T="int?" Value="null" Default="true">Everyone</MudChip>
+        @foreach (var kid in _kids)
+        {
+            <MudChip T="int?" Value="kid.Id">@kid.Name</MudChip>
+        }
+    </MudChipSet>
+    <MudSwitch @bind-Value="_showBought" Color="Color.Secondary" Label="Show bought" Class="ml-auto" />
 </div>
 
-<MudTextField @bind-Value="_search" Placeholder="Search gifts" Immediate="true" DebounceInterval="150"
-              Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" Clearable="true"
-              Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-2" Style="max-width:360px" />
-
-<MudChipSet T="int?" @bind-SelectedValue="_kidFilter" SelectionMode="SelectionMode.SingleSelection" Class="mb-2">
-    <MudChip T="int?" Value="null" Default="true">Everyone</MudChip>
-    @foreach (var kid in _kids)
-    {
-        <MudChip T="int?" Value="kid.Id">@kid.Name</MudChip>
-    }
-</MudChipSet>
-
-<MudTable Items="Sorted(Visible)" GroupBy="ByKid" Hover="true" Dense="true" Breakpoint="Breakpoint.Sm" Elevation="0" Outlined="true">
-    <GroupHeaderTemplate>
-        <MudTh colspan="6" Class="@(context.GroupName == "Kid" ? "kid-header" : "store-header")">
-            <MudIcon Icon="@(context.GroupName == "Kid" ? Icons.Material.Filled.ChildCare : Icons.Material.Filled.Storefront)"
-                     Size="Size.Small" Class="mr-2" Style="vertical-align:middle" />
-            <b>@context.Key</b> <span class="mud-text-secondary">· @context.Items.Count() gift@(context.Items.Count() == 1 ? "" : "s")@(StoreTotal(context.Items) is > 0 and var t ? $" · {t:C0}" : "")</span>
-        </MudTh>
-    </GroupHeaderTemplate>
-    <HeaderContent>
-        <MudTh></MudTh>
-        <MudTh>Gift</MudTh>
-        <MudTh>Price</MudTh>
-        <MudTh>Who buys it</MudTh>
-        @if (_showBought) { <MudTh>Status</MudTh> }
-        <MudTh></MudTh>
-    </HeaderContent>
-    <RowTemplate>
-        <MudTd Style="width:64px">
-            @if (context.ImageUrl is not null)
-            {
-                <a href="@context.Url" target="_blank" rel="noopener noreferrer">
-                    <img class="gift-thumb" src="@context.ImageUrl" alt="" referrerpolicy="no-referrer" loading="lazy" />
-                </a>
-            }
-        </MudTd>
-        <MudTd DataLabel="Gift">
-            @if (context.Url is not null)
-            {
-                <MudLink Href="@context.Url" Target="_blank" rel="noopener noreferrer">@context.Title</MudLink>
-            }
-            else { @context.Title }
-            @if (context.Notes is not null)
-            {
-                <MudText Typo="Typo.caption" Class="d-block mud-text-secondary">@context.Notes</MudText>
-            }
-        </MudTd>
-        <MudTd DataLabel="Price">@context.Price?.ToString("C")</MudTd>
-        <MudTd DataLabel="Who buys it" Style="min-width:180px">
-            <MudSelect T="int" MultiSelection="true" SelectAll="@(_groups.Count > 1)" SelectAllText="Any group"
-                       SelectedValues="context.Groups.Select(g => g.Id).ToList()" SelectedValuesChanged="v => AssignAsync(context, v)"
-                       MultiSelectionTextFunc="_ => GroupsText(context)"
-                       Dense="true" Margin="Margin.Dense" Variant="Variant.Outlined"
-                       Placeholder="Unassigned" Disabled="@(context.PurchasedAt != null)">
-                @foreach (var g in _groups)
-                {
-                    <MudSelectItem Value="g.Id">@g.Name</MudSelectItem>
-                }
-            </MudSelect>
-        </MudTd>
-        @if (_showBought)
+@{ var byKid = Sorted(Visible).GroupBy(g => GiftService.KidsLabel(g.Kids, _kids.Count)).ToList(); }
+@if (byKid.Count == 0)
+{
+    <div class="gp-empty">
+        <span>🎁</span>
+        <p>@(_gifts.Count == 0 ? "No gifts yet. Add the first one." : "Nothing matches that search.")</p>
+    </div>
+}
+<div class="gp-board">
+@foreach (var kid in byKid)
+{
+    <section class="gp-kid">
+        <header class="gp-kid-head">
+            <span class="gp-avatar">@kid.Key[..1]</span>
+            <div>
+                <h2>@kid.Key</h2>
+                <span>@kid.Count() gift@(kid.Count() == 1 ? "" : "s") · @StoreTotal(kid).ToString("C0")</span>
+            </div>
+        </header>
+        @foreach (var store in kid.GroupBy(g => g.Store))
         {
-            <MudTd DataLabel="Status">
-                @if (context.PurchasedAt is not null)
-                {
-                    <MudTooltip Text="@($"{context.PurchasedByGroup?.Name ?? "Marked"} · {context.PurchasedAt.Value.ToLocalTime():MMM d}")">
-                        <MudChip T="string" Size="Size.Small" Color="Color.Success" Icon="@Icons.Material.Filled.Check"
-                                 OnClose="() => ClearAsync(context)">Bought</MudChip>
-                    </MudTooltip>
-                }
-            </MudTd>
+            <div class="gp-store">@(store.Key == Stores.NoLink ? "Anywhere" : store.Key)</div>
+            @foreach (var gift in store)
+            {
+                var bought = gift.PurchasedAt is not null;
+                <article class="gp-row @(bought && _showBought ? "is-bought" : "")">
+                    <a class="gp-row-img" href="@gift.Url" target="_blank" rel="noopener noreferrer">
+                        @if (gift.ImageUrl is not null)
+                        {
+                            <img src="@gift.ImageUrl" alt="" referrerpolicy="no-referrer" loading="lazy" />
+                        }
+                        else
+                        {
+                            <MudIcon Icon="@Icons.Material.Outlined.Redeem" />
+                        }
+                    </a>
+                    <div class="gp-row-main">
+                        <div class="gp-row-top">
+                            @if (gift.Url is not null)
+                            {
+                                <a class="gp-row-title clamp-2" href="@gift.Url" target="_blank" rel="noopener noreferrer" title="@gift.Title">@gift.Title</a>
+                            }
+                            else
+                            {
+                                <span class="gp-row-title clamp-2" title="@gift.Title">@gift.Title</span>
+                            }
+                            <span class="gp-row-price"><Price Value="gift.Price" /></span>
+                        </div>
+                        @if (gift.Notes is not null)
+                        {
+                            <div class="gp-row-notes">@gift.Notes</div>
+                        }
+                        <div class="gp-row-bottom">
+                            <MudSelect T="int" MultiSelection="true" SelectAll="@(_groups.Count > 1)" SelectAllText="Any group"
+                                       SelectedValues="gift.Groups.Select(g => g.Id).ToList()" SelectedValuesChanged="v => AssignAsync(gift, v)"
+                                       MultiSelectionTextFunc="_ => GroupsText(gift)"
+                                       Dense="true" Margin="Margin.Dense" Variant="Variant.Text" Underline="false"
+                                       AdornmentIcon="@Icons.Material.Filled.ExpandMore"
+                                       Placeholder="Unassigned" Disabled="@(gift.PurchasedAt != null)" Class="gp-assign">
+                                @foreach (var g in _groups)
+                                {
+                                    <MudSelectItem Value="g.Id">@g.Name</MudSelectItem>
+                                }
+                            </MudSelect>
+                            @if (_showBought && bought)
+                            {
+                                <MudTooltip Text="@($"{gift.PurchasedByGroup?.Name ?? "Marked"} · {gift.PurchasedAt!.Value.ToLocalTime():MMM d}")">
+                                    <MudChip T="string" Size="Size.Small" Color="Color.Success" Icon="@Icons.Material.Filled.Check"
+                                             OnClose="() => ClearAsync(gift)">Bought</MudChip>
+                                </MudTooltip>
+                            }
+                            <div class="gp-row-actions">
+                                <MudIconButton Icon="@Icons.Material.Outlined.Edit" Size="Size.Small" aria-label="Edit" OnClick="() => EditAsync(gift)" />
+                                <MudIconButton Icon="@Icons.Material.Outlined.Delete" Size="Size.Small" aria-label="Delete" OnClick="() => DeleteAsync(gift)" />
+                            </div>
+                        </div>
+                    </div>
+                </article>
+            }
         }
-        <MudTd Style="white-space:nowrap; text-align:right">
-            <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" aria-label="Edit" OnClick="() => EditAsync(context)" />
-            <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" aria-label="Delete" OnClick="() => DeleteAsync(context)" />
-        </MudTd>
-    </RowTemplate>
-    <NoRecordsContent><MudText>No gifts yet. Add one to get started.</MudText></NoRecordsContent>
-</MudTable>
+    </section>
+}
+</div>
 
 @if (_showBought && _summary.Any(s => s.Purchased > 0))
 {
@@ -135,14 +161,6 @@
     private int? _kidFilter;
     private bool _showBought; // off by default so a kid looking over your shoulder sees nothing
 
-    // Stores A–Z, with link-less gifts last.
-    // Kid first, then store within each kid.
-    private TableGroupDefinition<Gift>? _byKid;
-    private TableGroupDefinition<Gift> ByKid => _byKid ??= new()
-    {
-        GroupName = "Kid", Selector = g => GiftService.KidsLabel(g.Kids, _kids!.Count), Indentation = false,
-        InnerGroup = new TableGroupDefinition<Gift> { GroupName = "Store", Selector = g => g.Store, Indentation = false },
-    };
     private static decimal StoreTotal(IEnumerable<Gift> gifts) => gifts.Sum(g => g.Price ?? 0);
 
     private string? _search;

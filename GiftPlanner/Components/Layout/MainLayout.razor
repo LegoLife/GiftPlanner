@@ -6,15 +6,19 @@
 <MudDialogProvider />
 <MudSnackbarProvider />
 
-<MudLayout>
-    <MudAppBar Elevation="1">
-        <MudIcon Icon="@Icons.Material.Filled.Redeem" Class="mr-3" />
-        <MudText Typo="Typo.h6" Class="d-none d-sm-flex">Gift Planner</MudText>
+<MudLayout Class="gp-shell">
+    <MudAppBar Elevation="0" Class="gp-appbar">
+        <a href="/" class="gp-brand">
+            <img src="favicon.svg" alt="" width="28" height="28" />
+            <span class="d-none d-sm-inline">Gift<em>Planner</em></span>
+        </a>
         <MudSpacer />
         <AuthorizeView Roles="@Roles.Admin">
-            <MudButton Href="/" Color="Color.Inherit" StartIcon="@Icons.Material.Filled.ListAlt">Gifts</MudButton>
-            <MudButton Href="setup" Color="Color.Inherit" StartIcon="@Icons.Material.Filled.Groups">People</MudButton>
-            <MudButton Href="import" Color="Color.Inherit" StartIcon="@Icons.Material.Filled.PlaylistAdd">Import</MudButton>
+            <nav class="gp-nav">
+                <NavLink href="/" Match="NavLinkMatch.All">Gifts</NavLink>
+                <NavLink href="setup">People</NavLink>
+                <NavLink href="import">Import</NavLink>
+            </nav>
         </AuthorizeView>
         <MudTooltip Text="@(_dark ? "Light mode" : "Dark mode")">
             <MudIconButton Icon="@(_dark ? Icons.Material.Filled.LightMode : Icons.Material.Filled.DarkMode)"
@@ -29,7 +33,7 @@
         </AuthorizeView>
     </MudAppBar>
     <MudMainContent>
-        <MudContainer MaxWidth="MaxWidth.Large" Class="py-6">
+        <MudContainer MaxWidth="MaxWidth.Large" Class="py-8 gp-main">
             @Body
         </MudContainer>
     </MudMainContent>
@@ -47,22 +51,52 @@
     private MudThemeProvider _themeProvider = default!;
     private bool _dark;
 
+    private static readonly string[] Sans = ["Inter", "system-ui", "-apple-system", "Segoe UI", "sans-serif"];
+    private static readonly string[] Serif = Sans;
+
     private readonly MudTheme _theme = new()
     {
         PaletteLight = new PaletteLight
         {
-            Primary = "#b3261e",
-            Secondary = "#1e6b3a",
-            AppbarBackground = "#b3261e",
+            Primary = "#a3201b",
+            Secondary = "#1f5c3d",
+            Success = "#1f7a4d",
+            Background = "#eaeded",
+            Surface = "#ffffff",
+            AppbarBackground = "#131921",
+            AppbarText = "#ffffff",
+            TextPrimary = "#0f1111",
+            TextSecondary = "#565959",
+            LinesDefault = "#d5d9d9",
+            TableLines = "#e3e6e6",
+            BackgroundGray = "#f7f8f8",
+            ActionDefault = "#6b625a",
         },
         PaletteDark = new PaletteDark
         {
-            Primary = "#f08a80",
-            Secondary = "#7fc79a",
-            AppbarBackground = "#5c1410",
-            Background = "#1b1a1a",
-            Surface = "#252323",
-            DrawerBackground = "#252323",
+            Primary = "#e2584c",
+            Secondary = "#86d1a4",
+            Success = "#86d1a4",
+            Background = "#181a1a",
+            Surface = "#222525",
+            DrawerBackground = "#222525",
+            AppbarBackground = "#0f1111",
+            AppbarText = "#f3ece5",
+            TextPrimary = "#f3ece5",
+            TextSecondary = "#a89d94",
+            LinesDefault = "#2f2926",
+            TableLines = "#2a2522",
+            BackgroundGray = "#262120",
+        },
+        LayoutProperties = new LayoutProperties { DefaultBorderRadius = "14px" },
+        Typography = new Typography
+        {
+            Default = new DefaultTypography { FontFamily = Sans },
+            H3 = new H3Typography { FontFamily = Serif, FontWeight = "500", LetterSpacing = "-.02em" },
+            H4 = new H4Typography { FontFamily = Serif, FontWeight = "500", LetterSpacing = "-.02em" },
+            H5 = new H5Typography { FontFamily = Serif, FontWeight = "500", LetterSpacing = "-.01em" },
+            H6 = new H6Typography { FontFamily = Serif, FontWeight = "500" },
+            Button = new ButtonTypography { FontFamily = Sans, FontWeight = "600", TextTransform = "none", LetterSpacing = "0" },
         },
     };
 
