@@ -84,6 +84,7 @@
         @foreach (var store in kid.GroupBy(g => g.Store))
         {
             <div class="gp-store">@(store.Key == Stores.NoLink ? "Anywhere" : store.Key)</div>
+            <div class="gp-rows">
             @foreach (var gift in store)
             {
                 var bought = gift.PurchasedAt is not null;
@@ -141,6 +142,7 @@
                     </div>
                 </article>
             }
+            </div>
         }
     </section>
 }

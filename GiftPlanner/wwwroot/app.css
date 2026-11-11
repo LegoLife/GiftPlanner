@@ -342,3 +342,12 @@ a.gp-row-title:hover { color: var(--mud-palette-primary); }
 .gp-strip-num { font-family: var(--gp-sans); font-weight: 700; font-size: 2rem; }
 .gp-brand { font-size: 1.2rem; }
 .mud-typography-h3, .mud-typography-h4, .mud-typography-h5, .mud-typography-h6 { font-weight: 700 !important; }
+
+/* ===== Gifts board: one column of kid panels, items in a grid inside (v5) ===== */
+.gp-board { grid-template-columns: 1fr; gap: 16px; }
+.gp-kid { padding: 4px 8px 10px; }
+.gp-kid-head { padding: 12px 12px 4px; }
+.gp-store { margin: 4px 8px 0; padding: 12px 4px 6px; }
+.gp-rows { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr)); gap: 4px 8px; }
+.gp-row { padding: 8px; }
+.gp-row-img { width: 64px; height: 64px; }
