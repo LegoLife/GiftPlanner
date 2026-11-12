@@ -351,3 +351,8 @@ a.gp-row-title:hover { color: var(--mud-palette-primary); }
 .gp-rows { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr)); gap: 4px 8px; }
 .gp-row { padding: 8px; }
 .gp-row-img { width: 64px; height: 64px; }
+
+/* Whole card clicks through to the product; action buttons sit above the overlay link. */
+.gift-card.linked { position: relative; cursor: pointer; }
+.gift-card-link { position: absolute; inset: 0; z-index: 1; border-radius: inherit; }
+.gift-card.linked .gift-card-actions { position: relative; z-index: 2; }

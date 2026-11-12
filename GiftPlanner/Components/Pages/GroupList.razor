@@ -98,12 +98,16 @@ else
         @foreach (var gift in store)
         {
             var bought = gift.PurchasedAt is not null;
-            <MudPaper Outlined="true" Class="@($"gift-card{(bought ? " bought" : "")}")">
+            <MudPaper Outlined="true" Class="@($"gift-card{(bought ? " bought" : "")}{(gift.Url is not null ? " linked" : "")}")">
+                @if (gift.Url is not null)
+                {
+                    <a class="gift-card-link" href="@gift.Url" target="_blank" rel="noopener noreferrer" aria-label="@($"View {gift.Title} at {gift.Store}")"></a>
+                }
                 @if (gift.ImageUrl is not null)
                 {
-                    <a class="gift-card-img" href="@gift.Url" target="_blank" rel="noopener noreferrer">
+                    <div class="gift-card-img">
                         <img src="@gift.ImageUrl" alt="" referrerpolicy="no-referrer" loading="lazy" />
-                    </a>
+                    </div>
                 }
                 <div class="gift-card-body">
                     <div class="gift-card-title clamp-2" title="@gift.Title" style="@(bought ? "text-decoration: line-through" : null)">@gift.Title</div>
