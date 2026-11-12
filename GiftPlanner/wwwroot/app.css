@@ -196,6 +196,17 @@ body { font-family: var(--gp-sans); -webkit-font-smoothing: antialiased; }
 .login-card button:hover { background: #a3201b; transform: translateY(-1px); }
 .login-error { margin: 0; color: #b42318; font-size: .9rem; }
 .login-form { display: flex; flex-direction: column; gap: 8px; margin-top: 4px; }
+.login-alt { margin: 6px 0 0; font-size: .9rem; color: #6b625a; text-align: center; }
+.login-alt a { color: #a3201b; font-weight: 600; }
+.google-btn { display: flex; align-items: center; justify-content: center; gap: 10px; padding: 11px; border-radius: 999px;
+    border: 1px solid #e0d6ca; background: #fff; color: #1f1f1f; font-weight: 600; text-decoration: none; transition: box-shadow .2s; }
+.google-btn:hover { box-shadow: 0 2px 8px rgba(0,0,0,.12); }
+.login-card button.google-btn, .login-card button.google-btn:hover { background: #fff; color: #1f1f1f; margin-top: 0; transform: none; border: 1px solid #e0d6ca; }
+.login-or { display: flex; align-items: center; gap: 10px; color: #6b625a; font-size: .8rem; text-transform: uppercase; letter-spacing: .08em; }
+.login-or::before, .login-or::after { content: ""; flex: 1; border-top: 1px solid #e0d6ca; }
+.login-note { margin: 0; padding: 10px 12px; border-radius: 12px; background: #fff7d6; color: #5c4a00; font-size: .9rem; }
+/* Sign-up honeypot: off-screen rather than display:none, which some bots know to skip. */
+.hp { position: absolute; left: -10000px; top: auto; width: 1px; height: 1px; overflow: hidden; }
 @media (prefers-color-scheme: dark) {
     .login-shell { background: #141110; color: #f3ece5; }
     .login-card { background: rgba(30,26,24,.7); border-color: rgba(255,255,255,.08); }
@@ -204,6 +215,11 @@ body { font-family: var(--gp-sans); -webkit-font-smoothing: antialiased; }
     .login-card h1 em { color: #ff8a7a; }
     .login-card button { background: #f3ece5; color: #141110; }
     .login-card button:hover { background: #ff8a7a; }
+    .login-alt, .login-or { color: #a89d94; }
+    .login-alt a { color: #ff8a7a; }
+    .login-or::before, .login-or::after { border-color: #3a332f; }
+    .google-btn { background: #131314; color: #e3e3e3; border-color: #8e918f; }
+    .login-card button.google-btn, .login-card button.google-btn:hover { background: #131314; color: #e3e3e3; border-color: #8e918f; }
 }
 
 /* ===== Gifts board (v2) ===== */

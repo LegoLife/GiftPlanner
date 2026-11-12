@@ -1,5 +1,5 @@
 #!/bin/sh
-# Sets (or changes) the GiftPlanner login password. Only its hash is stored in .env.
+# Sets (or changes) the owner account's password (sign in with GIFTPLANNER_OWNER_EMAIL). Only its hash is stored in .env.
 set -e
 cd "$(dirname "$0")"
 

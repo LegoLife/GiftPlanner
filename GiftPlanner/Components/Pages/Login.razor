@@ -2,11 +2,12 @@
 @layout LoginLayout
 @attribute [AllowAnonymous]
 @attribute [ExcludeFromInteractiveRouting]
-@using System.Security.Claims
 @using Microsoft.AspNetCore.Authentication
 @using Microsoft.AspNetCore.Authentication.Cookies
 @using GiftPlanner.Auth
-@inject PasswordVerifier Verifier
+@inject AccountService Accounts
+@inject SignupGuard Guard
+@inject SignInOptions Options
 @inject NavigationManager Nav
 
 <PageTitle>Sign in · Gift Planner</PageTitle>
@@ -16,45 +17,60 @@
     <h1>Gift<em>Planner</em></h1>
     <p class="login-sub">The family wish list, kept quiet till Christmas.</p>
 
-    @AdminForm
+    @if (Options.GoogleEnabled)
+    {
+        <a class="google-btn" href="@($"auth/google?returnUrl={Uri.EscapeDataString(SignInOptions.SafeReturnUrl(ReturnUrl))}")">
+            <GoogleMark /> Continue with Google
+        </a>
+        <div class="login-or"><span>or</span></div>
+    }
+    @if (Error == "google")
+    {
+        <p class="login-error" role="alert">Google sign-in didn't finish. Please try again.</p>
+    }
+
+    <form class="login-form" method="post" @onsubmit="SignInAsync" @formname="login">
+        <AntiforgeryToken />
+        <label for="email">Email</label>
+        <input id="email" name="Email" type="email" autocomplete="username" required value="@Email" />
+        <label for="password">Password</label>
+        <input id="password" name="Password" type="password" autocomplete="current-password" required value="" />
+        @if (_message is not null)
+        {
+            <p class="login-error" role="alert">@_message</p>
+        }
+        <button type="submit">Sign in</button>
+    </form>
+
+    <p class="login-alt">New here? <a href="@($"signup?ReturnUrl={Uri.EscapeDataString(SignInOptions.SafeReturnUrl(ReturnUrl))}")">Create an account</a></p>
 </div>
 
 @code {
     [CascadingParameter] private HttpContext HttpContext { get; set; } = default!;
+    [SupplyParameterFromForm] private string? Email { get; set; }
     [SupplyParameterFromForm] private string? Password { get; set; }
     [SupplyParameterFromQuery] private string? ReturnUrl { get; set; }
+    [SupplyParameterFromQuery] private string? Error { get; set; }
 
-    private bool _failed;
-
-    private RenderFragment AdminForm => @<form class="login-form" method="post" @onsubmit="SignInAsync" @formname="login">
-        <AntiforgeryToken />
-        <label for="password">Password</label>
-        <input id="password" name="Password" type="password" autocomplete="current-password" autofocus required value="" />
-        @if (_failed)
-        {
-            <p class="login-error" role="alert">That password isn't right.</p>
-        }
-        <button type="submit">Sign in</button>
-    </form>;
+    private string? _message;
 
     private async Task SignInAsync()
     {
-        if (!Verifier.Verify(Password))
+        if (!Guard.AllowLoginAttempt(HttpContext.Connection.RemoteIpAddress?.ToString() ?? "?"))
+        {
+            _message = "Too many tries. Please wait a few minutes.";
+            return;
+        }
+        var account = await Accounts.VerifyPasswordAsync(Email, Password);
+        if (account is null)
         {
             await Task.Delay(1000); // slow down guessing
-            _failed = true;
+            _message = "That email and password don't match.";
             return;
         }
 
-        var identity = new ClaimsIdentity(
-            [new Claim(ClaimTypes.Name, "Admin"), new Claim(ClaimTypes.Role, Roles.Admin)],
-            CookieAuthenticationDefaults.AuthenticationScheme);
         await HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme,
-            new ClaimsPrincipal(identity), new AuthenticationProperties { IsPersistent = true });
-
-        Nav.NavigateTo(IsLocal(ReturnUrl) ? ReturnUrl! : "/", forceLoad: true);
+            AccountService.Principal(account), new AuthenticationProperties { IsPersistent = true });
+        Nav.NavigateTo(SignInOptions.SafeReturnUrl(ReturnUrl), forceLoad: true);
     }
-
-    private static bool IsLocal(string? url) =>
-        !string.IsNullOrEmpty(url) && url[0] == '/' && (url.Length == 1 || (url[1] != '/' && url[1] != '\\'));
 }

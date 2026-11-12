@@ -1,8 +1,26 @@
 namespace GiftPlanner.Data;
 
+/// <summary>One household's sign-in. Every kid, group and gift belongs to exactly one account.</summary>
+public class Account
+{
+    public int Id { get; set; }
+    public string DisplayName { get; set; } = "";
+    public string? Email { get; set; }
+    /// <summary>Upper-cased email for unique, case-insensitive lookups.</summary>
+    public string? NormalizedEmail { get; set; }
+    /// <summary>Set for email + password sign-in; null for Google-only accounts.</summary>
+    public string? PasswordHash { get; set; }
+    /// <summary>Google's stable user id ("sub"), once the account has signed in with Google.</summary>
+    public string? GoogleSubject { get; set; }
+    /// <summary>True once Google (or the server config) has vouched for the email.</summary>
+    public bool EmailVerified { get; set; }
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+}
+
 public class Kid
 {
     public int Id { get; set; }
+    public int AccountId { get; set; }
     public string Name { get; set; } = "";
     public List<Gift> Gifts { get; set; } = [];
 }
@@ -11,6 +29,7 @@ public class Kid
 public class GiverGroup
 {
     public int Id { get; set; }
+    public int AccountId { get; set; }
     public string Name { get; set; } = "";
     /// <summary>Unguessable token in the group's link: /g/{ShareToken}.</summary>
     public string ShareToken { get; set; } = "";
@@ -20,6 +39,7 @@ public class GiverGroup
 public class Gift
 {
     public int Id { get; set; }
+    public int AccountId { get; set; }
     /// <summary>Who it's for: one kid, several, or all of them (e.g. a family board game).</summary>
     public List<Kid> Kids { get; set; } = [];
     public string Title { get; set; } = "";

@@ -12,16 +12,18 @@ public static class DemoData
         await db.Database.EnsureDeletedAsync();
         await db.Database.EnsureCreatedAsync();
 
-        Kid maya = new() { Name = "Maya" }, leo = new() { Name = "Leo" }, nora = new() { Name = "Nora" };
-        GiverGroup grandparents = new() { Name = "Grandma & Grandpa", ShareToken = "grandma-grandpa" };
-        GiverGroup aunt = new() { Name = "Aunt Kate", ShareToken = "aunt-kate" };
+        const int me = 1; // DemoAuthState's account
+        db.Accounts.Add(new Account { Id = me, DisplayName = "Demo", Email = "demo@example.com" });
+        Kid maya = new() { Name = "Maya", AccountId = me }, leo = new() { Name = "Leo", AccountId = me }, nora = new() { Name = "Nora", AccountId = me };
+        GiverGroup grandparents = new() { Name = "Grandma & Grandpa", ShareToken = "grandma-grandpa", AccountId = me };
+        GiverGroup aunt = new() { Name = "Aunt Kate", ShareToken = "aunt-kate", AccountId = me };
         var start = new DateTime(2026, 11, 1, 12, 0, 0, DateTimeKind.Utc);
         var n = 0;
 
         Gift G(string title, decimal price, string url, string color, string label,
                Kid[] kids, GiverGroup[] groups, bool bought = false) => new()
         {
-            Title = title, Price = price, Url = url, ImageUrl = Picture(color, label),
+            AccountId = me, Title = title, Price = price, Url = url, ImageUrl = Picture(color, label),
             Kids = [.. kids], Groups = [.. groups], CreatedAt = start.AddMinutes(n++),
             PurchasedAt = bought ? start.AddDays(9) : null, PurchasedByGroup = bought ? groups[0] : null,
         };

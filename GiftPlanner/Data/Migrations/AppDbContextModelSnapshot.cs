@@ -47,10 +47,52 @@ namespace GiftPlanner.Data.Migrations
                     b.ToTable("GiftKid");
                 });
 
+            modelBuilder.Entity("GiftPlanner.Data.Account", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("DisplayName")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Email")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("EmailVerified")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("GoogleSubject")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("NormalizedEmail")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("PasswordHash")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("GoogleSubject")
+                        .IsUnique();
+
+                    b.HasIndex("NormalizedEmail")
+                        .IsUnique();
+
+                    b.ToTable("Accounts");
+                });
+
             modelBuilder.Entity("GiftPlanner.Data.Gift", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("AccountId")
                         .HasColumnType("INTEGER");
 
                     b.Property<bool>("Archived")
@@ -83,6 +125,8 @@ namespace GiftPlanner.Data.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("AccountId");
+
                     b.HasIndex("PurchasedByGroupId");
 
                     b.ToTable("Gifts");
@@ -94,6 +138,9 @@ namespace GiftPlanner.Data.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("INTEGER");
 
+                    b.Property<int>("AccountId")
+                        .HasColumnType("INTEGER");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasColumnType("TEXT");
@@ -103,6 +150,8 @@ namespace GiftPlanner.Data.Migrations
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("AccountId");
 
                     b.HasIndex("ShareToken")
                         .IsUnique();
@@ -116,11 +165,16 @@ namespace GiftPlanner.Data.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("INTEGER");
 
+                    b.Property<int>("AccountId")
+                        .HasColumnType("INTEGER");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("AccountId");
 
                     b.ToTable("Kids");
                 });
@@ -157,12 +211,36 @@ namespace GiftPlanner.Data.Migrations
 
             modelBuilder.Entity("GiftPlanner.Data.Gift", b =>
                 {
+                    b.HasOne("GiftPlanner.Data.Account", null)
+                        .WithMany()
+                        .HasForeignKey("AccountId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
                     b.HasOne("GiftPlanner.Data.GiverGroup", "PurchasedByGroup")
                         .WithMany()
                         .HasForeignKey("PurchasedByGroupId")
                         .OnDelete(DeleteBehavior.SetNull);
 
                     b.Navigation("PurchasedByGroup");
+                });
+
+            modelBuilder.Entity("GiftPlanner.Data.GiverGroup", b =>
+                {
+                    b.HasOne("GiftPlanner.Data.Account", null)
+                        .WithMany()
+                        .HasForeignKey("AccountId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("GiftPlanner.Data.Kid", b =>
+                {
+                    b.HasOne("GiftPlanner.Data.Account", null)
+                        .WithMany()
+                        .HasForeignKey("AccountId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 #pragma warning restore 612, 618
         }

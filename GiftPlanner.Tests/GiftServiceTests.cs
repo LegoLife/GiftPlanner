@@ -1,3 +1,4 @@
+﻿using GiftPlanner.Auth;
 using GiftPlanner.Data;
 using GiftPlanner.Gifts;
 using Microsoft.Data.Sqlite;
@@ -10,6 +11,7 @@ public sealed class GiftServiceTests : IDisposable
 {
     private readonly SqliteConnection _connection = new("Data Source=:memory:");
     private readonly GiftService _svc;
+    private readonly TestDbFactory _factory;
     private readonly int _johnny, _lyla, _groupS, _groupJ;
     private readonly string _linkS, _linkJ;
 
@@ -17,8 +19,14 @@ public sealed class GiftServiceTests : IDisposable
     {
         _connection.Open();
         var factory = new TestDbFactory(new DbContextOptionsBuilder<AppDbContext>().UseSqlite(_connection).Options);
-        using (var db = factory.CreateDbContext()) db.Database.EnsureCreated();
-        _svc = new GiftService(factory);
+        using (var db = factory.CreateDbContext())
+        {
+            db.Database.EnsureCreated();
+            db.Accounts.AddRange(new Account { Id = 1, DisplayName = "Us" }, new Account { Id = 2, DisplayName = "Neighbors" });
+            db.SaveChanges();
+        }
+        _factory = factory;
+        _svc = new GiftService(factory, new FixedAccount(1));
 
         _johnny = _svc.AddKidAsync("Johnny").Result.Id;
         _lyla = _svc.AddKidAsync("Lyla").Result.Id;
@@ -200,8 +208,68 @@ public sealed class GiftServiceTests : IDisposable
     public void Kids_label(string[] names, int total, string expected) =>
         Assert.Equal(expected, GiftService.KidsLabel(names.Select(n => new Kid { Name = n }), total));
 
-    private sealed class TestDbFactory(DbContextOptions<AppDbContext> options) : IDbContextFactory<AppDbContext>
+    [Fact]
+    public async Task Another_account_sees_none_of_our_kids_groups_or_gifts()
     {
-        public AppDbContext CreateDbContext() => new(options);
+        var giftId = await AddGift("Bike", _groupS);
+        var neighbors = new GiftService(_factory, new FixedAccount(2));
+
+        Assert.Empty(await neighbors.GetKidsAsync());
+        Assert.Empty(await neighbors.GetGroupsAsync());
+        Assert.Empty(await neighbors.GetGiftsAsync());
+        Assert.Null(await neighbors.FindByUrlAsync("https://x"));
     }
+
+    [Fact]
+    public async Task Another_account_cannot_change_or_delete_our_things()
+    {
+        var giftId = await AddGift("Bike", _groupS);
+        var neighbors = new GiftService(_factory, new FixedAccount(2));
+
+        await neighbors.RenameKidAsync(_johnny, "Hacked");
+        await neighbors.DeleteKidAsync(_lyla);
+        await neighbors.DeleteGroupAsync(_groupJ);
+        await neighbors.DeleteGiftAsync(giftId);
+        await neighbors.ResetLinkAsync(_groupS);
+        Assert.Equal(0, await neighbors.SaveGiftAsync(new GiftEdit { Id = giftId, Title = "Hacked" }));
+
+        Assert.Equal(["Johnny", "Lyla"], (await _svc.GetKidsAsync()).Select(k => k.Name));
+        Assert.Equal(2, (await _svc.GetGroupsAsync()).Count);
+        var gift = Assert.Single(await _svc.GetGiftsAsync());
+        Assert.Equal("Bike", gift.Title);
+        Assert.NotNull(await _svc.GetGroupByTokenAsync(_linkS));
+    }
+
+    [Fact]
+    public async Task A_new_gift_cannot_use_another_accounts_kids_or_groups()
+    {
+        var neighbors = new GiftService(_factory, new FixedAccount(2));
+        var id = await neighbors.SaveGiftAsync(new GiftEdit { Title = "Kite", KidIds = [_johnny], GroupIds = [_groupS] });
+
+        var gift = Assert.Single(await neighbors.GetGiftsAsync());
+        Assert.Equal(id, gift.Id);
+        Assert.Empty(gift.Kids);
+        Assert.Empty(gift.Groups);
+        Assert.Empty(await _svc.GetGiftsForLinkAsync(_linkS));
+    }
+
+    [Fact]
+    public async Task Each_account_starts_empty_and_keeps_its_own_lists()
+    {
+        var neighbors = new GiftService(_factory, new FixedAccount(2));
+        await neighbors.AddKidAsync("Sam");
+
+        Assert.Equal(["Sam"], (await neighbors.GetKidsAsync()).Select(k => k.Name));
+        Assert.Equal(["Johnny", "Lyla"], (await _svc.GetKidsAsync()).Select(k => k.Name));
+    }
+}
+
+internal sealed class FixedAccount(int id) : IAccountContext
+{
+    public Task<int> GetAccountIdAsync() => Task.FromResult(id);
+}
+
+internal sealed class TestDbFactory(DbContextOptions<AppDbContext> options) : IDbContextFactory<AppDbContext>
+{
+    public AppDbContext CreateDbContext() => new(options);
 }

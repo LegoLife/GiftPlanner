@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using GiftPlanner.Auth;
 using GiftPlanner.Data;
 using Microsoft.EntityFrameworkCore;
 
@@ -28,9 +29,14 @@ public sealed class GiftEdit
     };
 }
 
-/// <summary>All gift rules: a share link only ever sees or touches gifts assigned to its group.</summary>
-public sealed class GiftService(IDbContextFactory<AppDbContext> dbFactory)
+/// <summary>
+/// All gift rules. Admin methods only see the signed-in account's kids, groups and gifts;
+/// a share link only ever sees or touches gifts assigned to its group.
+/// </summary>
+public sealed class GiftService(IDbContextFactory<AppDbContext> dbFactory, IAccountContext account)
 {
+    private Task<int> Me() => account.GetAccountIdAsync();
+
     /// <summary>"Greyson", "Greyson & Lyla", "Ava, Greyson & Lyla", or "Everyone" when it's for every kid.</summary>
     public static string KidsLabel(IEnumerable<Kid> kids, int totalKids)
     {
@@ -44,14 +50,16 @@ public sealed class GiftService(IDbContextFactory<AppDbContext> dbFactory)
 
     public async Task<List<Kid>> GetKidsAsync()
     {
+        var me = await Me();
         await using var db = await dbFactory.CreateDbContextAsync();
-        return await db.Kids.OrderBy(k => k.Name).ToListAsync();
+        return await db.Kids.Where(k => k.AccountId == me).OrderBy(k => k.Name).ToListAsync();
     }
 
     public async Task<Kid> AddKidAsync(string name)
     {
+        var me = await Me();
         await using var db = await dbFactory.CreateDbContextAsync();
-        var kid = new Kid { Name = name.Trim() };
+        var kid = new Kid { Name = name.Trim(), AccountId = me };
         db.Kids.Add(kid);
         await db.SaveChangesAsync();
         return kid;
@@ -59,15 +67,17 @@ public sealed class GiftService(IDbContextFactory<AppDbContext> dbFactory)
 
     public async Task RenameKidAsync(int id, string name)
     {
+        var me = await Me();
         await using var db = await dbFactory.CreateDbContextAsync();
-        await db.Kids.Where(k => k.Id == id).ExecuteUpdateAsync(s => s.SetProperty(k => k.Name, name.Trim()));
+        await db.Kids.Where(k => k.Id == id && k.AccountId == me).ExecuteUpdateAsync(s => s.SetProperty(k => k.Name, name.Trim()));
     }
 
     /// <summary>Deletes the kid and gifts only for them; shared gifts just drop this kid.</summary>
     public async Task DeleteKidAsync(int id)
     {
+        var me = await Me();
         await using var db = await dbFactory.CreateDbContextAsync();
-        var kid = await db.Kids.Include(k => k.Gifts).ThenInclude(g => g.Kids).FirstOrDefaultAsync(k => k.Id == id);
+        var kid = await db.Kids.Include(k => k.Gifts).ThenInclude(g => g.Kids).FirstOrDefaultAsync(k => k.Id == id && k.AccountId == me);
         if (kid is null) return;
         db.Gifts.RemoveRange(kid.Gifts.Where(g => g.Kids.Count == 1));
         db.Kids.Remove(kid);
@@ -78,14 +88,16 @@ public sealed class GiftService(IDbContextFactory<AppDbContext> dbFactory)
 
     public async Task<List<GiverGroup>> GetGroupsAsync()
     {
+        var me = await Me();
         await using var db = await dbFactory.CreateDbContextAsync();
-        return await db.Groups.OrderBy(g => g.Name).ToListAsync();
+        return await db.Groups.Where(g => g.AccountId == me).OrderBy(g => g.Name).ToListAsync();
     }
 
     public async Task<GiverGroup> AddGroupAsync(string name)
     {
+        var me = await Me();
         await using var db = await dbFactory.CreateDbContextAsync();
-        var group = new GiverGroup { Name = name.Trim(), ShareToken = NewToken() };
+        var group = new GiverGroup { Name = name.Trim(), ShareToken = NewToken(), AccountId = me };
         db.Groups.Add(group);
         await db.SaveChangesAsync();
         return group;
@@ -93,15 +105,17 @@ public sealed class GiftService(IDbContextFactory<AppDbContext> dbFactory)
 
     public async Task RenameGroupAsync(int id, string name)
     {
+        var me = await Me();
         await using var db = await dbFactory.CreateDbContextAsync();
-        await db.Groups.Where(g => g.Id == id).ExecuteUpdateAsync(s => s.SetProperty(g => g.Name, name.Trim()));
+        await db.Groups.Where(g => g.Id == id && g.AccountId == me).ExecuteUpdateAsync(s => s.SetProperty(g => g.Name, name.Trim()));
     }
 
     /// <summary>Deletes the group; gifts only it could see become unassigned.</summary>
     public async Task DeleteGroupAsync(int id)
     {
+        var me = await Me();
         await using var db = await dbFactory.CreateDbContextAsync();
-        var group = await db.Groups.Include(g => g.Gifts).FirstOrDefaultAsync(g => g.Id == id);
+        var group = await db.Groups.Include(g => g.Gifts).FirstOrDefaultAsync(g => g.Id == id && g.AccountId == me);
         if (group is null) return;
         db.Groups.Remove(group);
         await db.SaveChangesAsync();
@@ -109,13 +123,14 @@ public sealed class GiftService(IDbContextFactory<AppDbContext> dbFactory)
 
     // ---------- Admin: gifts ----------
 
-    private static IQueryable<Gift> WithLinks(AppDbContext db) =>
-        db.Gifts.Include(g => g.Kids).Include(g => g.Groups).Include(g => g.PurchasedByGroup).AsSplitQuery();
+    private static IQueryable<Gift> WithLinks(AppDbContext db, int me) =>
+        db.Gifts.Where(g => g.AccountId == me).Include(g => g.Kids).Include(g => g.Groups).Include(g => g.PurchasedByGroup).AsSplitQuery();
 
     public async Task<List<Gift>> GetGiftsAsync(int? kidId = null, bool includeArchived = false)
     {
+        var me = await Me();
         await using var db = await dbFactory.CreateDbContextAsync();
-        var q = WithLinks(db);
+        var q = WithLinks(db, me);
         if (kidId is not null) q = q.Where(g => g.Kids.Any(k => k.Id == kidId));
         if (!includeArchived) q = q.Where(g => !g.Archived);
         return await q.OrderBy(g => g.CreatedAt).ToListAsync();
@@ -124,18 +139,19 @@ public sealed class GiftService(IDbContextFactory<AppDbContext> dbFactory)
     /// <summary>Adds or updates a gift's details and who it's for / who can buy it. Never changes purchase state.</summary>
     public async Task<int> SaveGiftAsync(GiftEdit edit)
     {
+        var me = await Me();
         await using var db = await dbFactory.CreateDbContextAsync();
         var entity = edit.Id == 0
-            ? new Gift()
-            : await db.Gifts.Include(g => g.Kids).Include(g => g.Groups).FirstOrDefaultAsync(g => g.Id == edit.Id);
+            ? new Gift { AccountId = me }
+            : await db.Gifts.Include(g => g.Kids).Include(g => g.Groups).FirstOrDefaultAsync(g => g.Id == edit.Id && g.AccountId == me);
         if (entity is null) return 0;
         entity.Title = edit.Title.Trim();
         entity.Url = string.IsNullOrWhiteSpace(edit.Url) ? null : edit.Url.Trim();
         entity.Notes = string.IsNullOrWhiteSpace(edit.Notes) ? null : edit.Notes.Trim();
         entity.Price = edit.Price;
         entity.ImageUrl = string.IsNullOrWhiteSpace(edit.ImageUrl) || entity.Url is null ? null : edit.ImageUrl.Trim();
-        entity.Kids = await db.Kids.Where(k => edit.KidIds.Contains(k.Id)).ToListAsync();
-        entity.Groups = await db.Groups.Where(g => edit.GroupIds.Contains(g.Id)).ToListAsync();
+        entity.Kids = await db.Kids.Where(k => k.AccountId == me && edit.KidIds.Contains(k.Id)).ToListAsync();
+        entity.Groups = await db.Groups.Where(g => g.AccountId == me && edit.GroupIds.Contains(g.Id)).ToListAsync();
         if (edit.Id == 0) db.Gifts.Add(entity);
         await db.SaveChangesAsync();
         return edit.Id = entity.Id;
@@ -145,39 +161,44 @@ public sealed class GiftService(IDbContextFactory<AppDbContext> dbFactory)
     public async Task<Gift?> FindByUrlAsync(string url)
     {
         var key = url.Split('#')[0].TrimEnd('/');
+        var me = await Me();
         await using var db = await dbFactory.CreateDbContextAsync();
-        var candidates = await db.Gifts.Include(g => g.Kids).Where(g => !g.Archived && g.Url != null && g.Url.StartsWith(key)).ToListAsync();
+        var candidates = await db.Gifts.Include(g => g.Kids).Where(g => g.AccountId == me && !g.Archived && g.Url != null && g.Url.StartsWith(key)).ToListAsync();
         return candidates.FirstOrDefault(g => g.Url!.Split('#')[0].TrimEnd('/') == key);
     }
 
     public async Task SetImageAsync(int giftId, string imageUrl)
     {
+        var me = await Me();
         await using var db = await dbFactory.CreateDbContextAsync();
-        await db.Gifts.Where(g => g.Id == giftId).ExecuteUpdateAsync(s => s.SetProperty(g => g.ImageUrl, imageUrl));
+        await db.Gifts.Where(g => g.Id == giftId && g.AccountId == me).ExecuteUpdateAsync(s => s.SetProperty(g => g.ImageUrl, imageUrl));
     }
 
     /// <summary>Sets exactly which groups can see (and buy) a gift.</summary>
     public async Task AssignAsync(int giftId, IEnumerable<int> groupIds)
     {
         var ids = groupIds.ToHashSet();
+        var me = await Me();
         await using var db = await dbFactory.CreateDbContextAsync();
-        var gift = await db.Gifts.Include(g => g.Groups).FirstOrDefaultAsync(g => g.Id == giftId);
+        var gift = await db.Gifts.Include(g => g.Groups).FirstOrDefaultAsync(g => g.Id == giftId && g.AccountId == me);
         if (gift is null) return;
-        gift.Groups = await db.Groups.Where(g => ids.Contains(g.Id)).ToListAsync();
+        gift.Groups = await db.Groups.Where(g => g.AccountId == me && ids.Contains(g.Id)).ToListAsync();
         await db.SaveChangesAsync();
     }
 
     public async Task DeleteGiftAsync(int id)
     {
+        var me = await Me();
         await using var db = await dbFactory.CreateDbContextAsync();
-        await db.Gifts.Where(g => g.Id == id).ExecuteDeleteAsync();
+        await db.Gifts.Where(g => g.Id == id && g.AccountId == me).ExecuteDeleteAsync();
     }
 
     /// <summary>Hides every bought gift (e.g. after Christmas) so next year's list starts clean.</summary>
     public async Task<int> ArchivePurchasedAsync()
     {
+        var me = await Me();
         await using var db = await dbFactory.CreateDbContextAsync();
-        return await db.Gifts.Where(g => g.PurchasedAt != null && !g.Archived)
+        return await db.Gifts.Where(g => g.AccountId == me && g.PurchasedAt != null && !g.Archived)
             .ExecuteUpdateAsync(s => s.SetProperty(g => g.Archived, true));
     }
 
@@ -197,8 +218,9 @@ public sealed class GiftService(IDbContextFactory<AppDbContext> dbFactory)
     /// <summary>Admin override, e.g. to fix a mis-click.</summary>
     public async Task ClearPurchasedAsync(int giftId)
     {
+        var me = await Me();
         await using var db = await dbFactory.CreateDbContextAsync();
-        await db.Gifts.Where(g => g.Id == giftId)
+        await db.Gifts.Where(g => g.Id == giftId && g.AccountId == me)
             .ExecuteUpdateAsync(s => s.SetProperty(g => g.PurchasedAt, (DateTime?)null)
                                       .SetProperty(g => g.PurchasedByGroupId, (int?)null));
     }
@@ -212,8 +234,9 @@ public sealed class GiftService(IDbContextFactory<AppDbContext> dbFactory)
     public async Task<string> ResetLinkAsync(int groupId)
     {
         var token = NewToken();
+        var me = await Me();
         await using var db = await dbFactory.CreateDbContextAsync();
-        await db.Groups.Where(g => g.Id == groupId).ExecuteUpdateAsync(s => s.SetProperty(g => g.ShareToken, token));
+        await db.Groups.Where(g => g.Id == groupId && g.AccountId == me).ExecuteUpdateAsync(s => s.SetProperty(g => g.ShareToken, token));
         return token;
     }
 

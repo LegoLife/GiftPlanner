@@ -1,0 +1,93 @@
+@page "/signup"
+@layout LoginLayout
+@attribute [AllowAnonymous]
+@attribute [ExcludeFromInteractiveRouting]
+@using Microsoft.AspNetCore.Authentication
+@using Microsoft.AspNetCore.Authentication.Cookies
+@using GiftPlanner.Auth
+@inject AccountService Accounts
+@inject SignupGuard Guard
+@inject SignInOptions Options
+@inject NavigationManager Nav
+
+<PageTitle>Create account · Gift Planner</PageTitle>
+
+<div class="login-card">
+    <img src="favicon.svg" alt="" width="44" height="44" />
+    <h1>Gift<em>Planner</em></h1>
+    <p class="login-sub">Make a private gift list for your family.</p>
+
+    @if (Options.GoogleEnabled)
+    {
+        <a class="google-btn" href="@($"auth/google?returnUrl={Uri.EscapeDataString(SignInOptions.SafeReturnUrl(ReturnUrl))}")">
+            <GoogleMark /> Sign up with Google
+        </a>
+        <div class="login-or"><span>or</span></div>
+    }
+
+    <form class="login-form" method="post" @onsubmit="SignUpAsync" @formname="signup">
+        <AntiforgeryToken />
+        <input type="hidden" name="FormToken" value="@_formToken" />
+        @* Honeypot: hidden from people (and screen readers), but simple bots fill in every field. *@
+        <div class="hp" aria-hidden="true">
+            <label for="website">Leave this blank</label>
+            <input id="website" name="Website" type="text" tabindex="-1" autocomplete="off" value="" />
+        </div>
+        <label for="name">Your name</label>
+        <input id="name" name="Name" type="text" autocomplete="name" maxlength="80" required value="@Name" />
+        <label for="email">Email</label>
+        <input id="email" name="Email" type="email" autocomplete="email" required value="@Email" />
+        <label for="password">Password</label>
+        <input id="password" name="Password" type="password" autocomplete="new-password"
+               minlength="@AccountService.MinPasswordLength" required value="" />
+        <label for="confirm">Password again</label>
+        <input id="confirm" name="Confirm" type="password" autocomplete="new-password" required value="" />
+        @if (_message is not null)
+        {
+            <p class="login-error" role="alert">@_message</p>
+        }
+        <button type="submit">Create account</button>
+    </form>
+
+    <p class="login-alt">Already have an account? <a href="@($"login?ReturnUrl={Uri.EscapeDataString(SignInOptions.SafeReturnUrl(ReturnUrl))}")">Sign in</a></p>
+</div>
+
+@code {
+    [CascadingParameter] private HttpContext HttpContext { get; set; } = default!;
+    [SupplyParameterFromForm] private string? Name { get; set; }
+    [SupplyParameterFromForm] private string? Email { get; set; }
+    [SupplyParameterFromForm] private string? Password { get; set; }
+    [SupplyParameterFromForm] private string? Confirm { get; set; }
+    [SupplyParameterFromForm] private string? Website { get; set; }
+    [SupplyParameterFromForm] private string? FormToken { get; set; }
+    [SupplyParameterFromQuery] private string? ReturnUrl { get; set; }
+
+    private string? _message;
+    private string _formToken = "";
+
+    // A fresh token every render, so a form shown again after an error gets its own timer.
+    protected override void OnInitialized() => _formToken = Guard.IssueFormToken();
+
+    private async Task SignUpAsync()
+    {
+        var check = Guard.Check(FormToken, Website, HttpContext.Connection.RemoteIpAddress?.ToString() ?? "?");
+        _message = check switch
+        {
+            SignupCheck.Ok => null,
+            SignupCheck.TooFast => "That was quick! Please check your details and press Create account again.",
+            SignupCheck.Expired => "This form expired. Please try again.",
+            SignupCheck.RateLimited => "Too many new accounts from your network. Please try again later.",
+            _ => "Something went wrong. Please try again.",
+        };
+        if (_message is not null) return;
+
+        if (Password != Confirm) { _message = "The passwords don't match."; return; }
+
+        var result = await Accounts.RegisterAsync(Name, Email, Password);
+        if (result.Account is null) { _message = result.Error; return; }
+
+        await HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme,
+            AccountService.Principal(result.Account), new AuthenticationProperties { IsPersistent = true });
+        Nav.NavigateTo("setup", forceLoad: true); // a new household starts by adding kids and givers
+    }
+}

@@ -1,0 +1,66 @@
+@page "/login"
+@page "/signup"
+@layout LoginLayout
+@inject NavigationManager Nav
+
+@* The demo's stand-in for Login.razor and Signup.razor: same screens, but nothing is created or checked. *@
+
+<PageTitle>@(_signup ? "Create account" : "Sign in") · Gift Planner demo</PageTitle>
+
+<div class="login-card">
+    <img src="favicon.svg" alt="" width="44" height="44" />
+    <h1>Gift<em>Planner</em></h1>
+    <p class="login-sub">@(_signup ? "Make a private gift list for your family." : "The family wish list, kept quiet till Christmas.")</p>
+
+    <p class="login-note">Demo: this shows the real sign-in screens, but no account is made. You're already signed in to the sample family.</p>
+
+    <button type="button" class="google-btn" @onclick="Pretend">
+        <GoogleMark /> @(_signup ? "Sign up with Google" : "Continue with Google")
+    </button>
+    <div class="login-or"><span>or</span></div>
+
+    <form class="login-form" @onsubmit="Pretend">
+        @if (_signup)
+        {
+            <label for="name">Your name</label>
+            <input id="name" type="text" autocomplete="off" />
+        }
+        <label for="email">Email</label>
+        <input id="email" type="email" autocomplete="off" />
+        <label for="password">Password</label>
+        <input id="password" type="password" autocomplete="off" />
+        @if (_signup)
+        {
+            <label for="confirm">Password again</label>
+            <input id="confirm" type="password" autocomplete="off" />
+        }
+        @if (_tried)
+        {
+            <p class="login-note" role="status">In the real app this @(_signup ? "creates your account" : "signs you in").
+                <a href="">Back to the sample lists</a></p>
+        }
+        <button type="submit">@(_signup ? "Create account" : "Sign in")</button>
+    </form>
+
+    @if (_signup)
+    {
+        <p class="login-alt">Already have an account? <a href="login">Sign in</a></p>
+    }
+    else
+    {
+        <p class="login-alt">New here? <a href="signup">Create an account</a></p>
+    }
+</div>
+
+@code {
+    private bool _signup;
+    private bool _tried;
+
+    protected override void OnParametersSet()
+    {
+        _signup = Nav.ToBaseRelativePath(Nav.Uri).StartsWith("signup", StringComparison.OrdinalIgnoreCase);
+        _tried = false;
+    }
+
+    private void Pretend() => _tried = true;
+}

@@ -1,5 +1,6 @@
 # GiftPlanner on the Raspberry Pi (prebuilt image, data on the external drive).
-# Lives at ~/giftplanner with .env (password hash) and set-password.sh.
+# Lives at ~/giftplanner with .env and set-password.sh. Anyone can create an account (email + password, or Google);
+# each account has its own private kids, groups and gifts.
 # Family open per-group share links; for them to work away from home the app must be reachable publicly (see README.md).
 services:
   giftplanner:
@@ -9,7 +10,14 @@ services:
     ports:
       - "8087:8080"
     environment:
-      GiftPlanner__PasswordHash: ${GIFTPLANNER_PASSWORD_HASH:?Run ./set-password.sh first}
+      # The owner account (everything from before accounts existed) signs in with this email and the
+      # password set by ./set-password.sh. Signing in with Google as the same email also works.
+      GiftPlanner__OwnerEmail: ${GIFTPLANNER_OWNER_EMAIL:-}
+      GiftPlanner__PasswordHash: ${GIFTPLANNER_PASSWORD_HASH:-}
+      # Google sign-in shows up once both are set (Google Cloud Console > OAuth client, redirect URI
+      # https://<public address>/signin-google). It only works over the public HTTPS address.
+      GiftPlanner__Google__ClientId: ${GIFTPLANNER_GOOGLE_CLIENT_ID:-}
+      GiftPlanner__Google__ClientSecret: ${GIFTPLANNER_GOOGLE_CLIENT_SECRET:-}
       # Public address used when building share links, e.g. https://gifts.example.com
       GiftPlanner__PublicUrl: ${GIFTPLANNER_PUBLIC_URL:-}
       TZ: America/New_York

@@ -9,7 +9,7 @@ public sealed class DemoAuthState : AuthenticationStateProvider
 {
     private static readonly Task<AuthenticationState> State = Task.FromResult(new AuthenticationState(
         new ClaimsPrincipal(new ClaimsIdentity(
-            [new Claim(ClaimTypes.Name, "Demo"), new Claim(ClaimTypes.Role, Roles.Admin)], "demo"))));
+            [new Claim(ClaimTypes.NameIdentifier, "1"), new Claim(ClaimTypes.Name, "Demo"), new Claim(ClaimTypes.Role, Roles.Admin)], "demo"))));
 
     public override Task<AuthenticationState> GetAuthenticationStateAsync() => State;
 }
