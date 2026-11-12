@@ -24,19 +24,21 @@
 
   <!-- Shared with the server app (linked, not copied). -->
   <PropertyGroup>
-    <App>..\GiftPlanner\</App>
+    <App>../GiftPlanner/</App>
   </PropertyGroup>
+  <!-- Forward slashes only: a backslash in Link becomes part of the file name on Linux (CI),
+       and the pages then lose their _Imports.razor. -->
   <ItemGroup>
-    <Compile Include="$(App)Data\Models.cs;$(App)Data\AppDbContext.cs;$(App)Auth\Roles.cs" Link="Shared\%(Filename)%(Extension)" />
-    <Compile Include="$(App)Gifts\*.cs" Link="Shared\Gifts\%(Filename)%(Extension)" />
-    <Content Include="$(App)Components\**\*.razor;$(App)Components\**\*.razor.css"
-             Exclude="$(App)Components\App.razor;$(App)Components\Pages\Login.razor;$(App)Components\Pages\Error.razor;$(App)Components\Layout\ReconnectModal.razor*"
-             Link="Components\%(RecursiveDir)%(Filename)%(Extension)" />
+    <Compile Include="$(App)Data/Models.cs;$(App)Data/AppDbContext.cs;$(App)Auth/Roles.cs" Link="Shared/%(Filename)%(Extension)" />
+    <Compile Include="$(App)Gifts/*.cs" Link="Shared/Gifts/%(Filename)%(Extension)" />
+    <Content Include="$(App)Components/**/*.razor;$(App)Components/**/*.razor.css"
+             Exclude="$(App)Components/App.razor;$(App)Components/Pages/Login.razor;$(App)Components/Pages/Error.razor;$(App)Components/Layout/ReconnectModal.razor*"
+             Link="Components/%(RecursiveDir)%(Filename)%(Extension)" />
   </ItemGroup>
 
   <!-- Static web assets don't follow linked files, so copy the shared ones in (they're git-ignored here). -->
   <Target Name="CopySharedAssets" BeforeTargets="BeforeBuild;ResolveProjectStaticWebAssets">
-    <Copy SourceFiles="$(App)wwwroot\app.css;$(App)wwwroot\favicon.svg" DestinationFolder="wwwroot" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="$(App)wwwroot/app.css;$(App)wwwroot/favicon.svg" DestinationFolder="wwwroot" SkipUnchangedFiles="true" />
   </Target>
 
 </Project>
