@@ -184,7 +184,7 @@ else
     private async Task LoadAsync()
     {
         _group = await Gifts.GetGroupByTokenAsync(Token);
-        _totalKids = (await Gifts.GetKidsAsync()).Count;
+        _totalKids = await Gifts.CountKidsForLinkAsync(Token);
         _gifts = _group is null ? [] : await Gifts.GetGiftsForLinkAsync(Token);
     }
 

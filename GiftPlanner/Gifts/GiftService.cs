@@ -247,6 +247,15 @@ public sealed class GiftService(IDbContextFactory<AppDbContext> dbFactory, IAcco
         return await db.Groups.FirstOrDefaultAsync(g => g.ShareToken == token);
     }
 
+    /// <summary>Number of kids in the account that owns this share link (no sign-in needed).</summary>
+    public async Task<int> CountKidsForLinkAsync(string token)
+    {
+        if (string.IsNullOrEmpty(token)) return 0;
+        await using var db = await dbFactory.CreateDbContextAsync();
+        var accountId = await db.Groups.Where(g => g.ShareToken == token).Select(g => (int?)g.AccountId).FirstOrDefaultAsync();
+        return accountId is null ? 0 : await db.Kids.CountAsync(k => k.AccountId == accountId);
+    }
+
     public async Task<List<Gift>> GetGiftsForLinkAsync(string token)
     {
         if (string.IsNullOrEmpty(token)) return [];
