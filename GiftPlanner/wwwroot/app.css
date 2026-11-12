@@ -356,3 +356,11 @@ a.gp-row-title:hover { color: var(--mud-palette-primary); }
 .gift-card.linked { position: relative; cursor: pointer; }
 .gift-card-link { position: absolute; inset: 0; z-index: 1; border-radius: inherit; }
 .gift-card.linked .gift-card-actions { position: relative; z-index: 2; }
+
+/* Browser-only demo (GiftPlanner.Demo on GitHub Pages) */
+.gp-demo-banner { margin-top: 64px; padding: 8px 16px; text-align: center; font-size: .85rem;
+    background: #fff3cd; color: #5c4400; border-bottom: 1px solid #f0d78c; }
+.gp-demo-banner + .mud-main-content { padding-top: 0; }
+.gp-demo-tag { color: inherit; font-weight: 600; font-size: .9rem; text-decoration: none; margin-left: 8px;
+    padding: 4px 12px; border: 1px solid rgba(255,255,255,.4); border-radius: 999px; }
+.gp-demo-tag:hover { background: rgba(255,255,255,.1); }

@@ -1,0 +1,42 @@
+<Project Sdk="Microsoft.NET.Sdk.BlazorWebAssembly">
+
+  <!-- Browser-only demo for GitHub Pages: the real GiftPlanner pages and GiftService, with SQLite compiled
+       to WebAssembly and made-up data. Needs the wasm-tools workload (dotnet workload install wasm-tools). -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>GiftPlanner</RootNamespace>
+    <WasmBuildNative>true</WasmBuildNative>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly" Version="10.0.11" />
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.DevServer" Version="10.0.11" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.AspNetCore.Components.Authorization" Version="10.0.11" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.12" />
+    <PackageReference Include="MudBlazor" Version="9.10.0" />
+    <!-- EF Core builds its model by reflection; keep its assemblies whole. -->
+    <TrimmerRootAssembly Include="Microsoft.EntityFrameworkCore" />
+    <TrimmerRootAssembly Include="Microsoft.EntityFrameworkCore.Relational" />
+    <TrimmerRootAssembly Include="Microsoft.EntityFrameworkCore.Sqlite" />
+  </ItemGroup>
+
+  <!-- Shared with the server app (linked, not copied). -->
+  <PropertyGroup>
+    <App>..\GiftPlanner\</App>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="$(App)Data\Models.cs;$(App)Data\AppDbContext.cs;$(App)Auth\Roles.cs" Link="Shared\%(Filename)%(Extension)" />
+    <Compile Include="$(App)Gifts\*.cs" Link="Shared\Gifts\%(Filename)%(Extension)" />
+    <Content Include="$(App)Components\**\*.razor;$(App)Components\**\*.razor.css"
+             Exclude="$(App)Components\App.razor;$(App)Components\Pages\Login.razor;$(App)Components\Pages\Error.razor;$(App)Components\Layout\ReconnectModal.razor*"
+             Link="Components\%(RecursiveDir)%(Filename)%(Extension)" />
+  </ItemGroup>
+
+  <!-- Static web assets don't follow linked files, so copy the shared ones in (they're git-ignored here). -->
+  <Target Name="CopySharedAssets" BeforeTargets="BeforeBuild;ResolveProjectStaticWebAssets">
+    <Copy SourceFiles="$(App)wwwroot\app.css;$(App)wwwroot\favicon.svg" DestinationFolder="wwwroot" SkipUnchangedFiles="true" />
+  </Target>
+
+</Project>

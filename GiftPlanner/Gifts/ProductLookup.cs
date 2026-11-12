@@ -31,6 +31,8 @@ public sealed partial class ProductLookup(HttpClient http, ILogger<ProductLookup
     {
         if (!Uri.TryCreate(url.Trim(), UriKind.Absolute, out var uri) || uri.Scheme is not ("http" or "https"))
             return null;
+        // In the browser-only demo there's no server to fetch store pages from (and CORS would block it).
+        if (OperatingSystem.IsBrowser()) return null;
         try
         {
             if (await IsPrivateHostAsync(uri.Host, ct)) return null; // don't let it poke at the home network

@@ -8,14 +8,14 @@
 
 <MudLayout Class="gp-shell">
     <MudAppBar Elevation="0" Class="gp-appbar">
-        <a href="/" class="gp-brand">
+        <a href="" class="gp-brand">
             <img src="favicon.svg" alt="" width="28" height="28" />
             <span class="d-none d-sm-inline">Gift<em>Planner</em></span>
         </a>
         <MudSpacer />
         <AuthorizeView Roles="@Roles.Admin">
             <nav class="gp-nav">
-                <NavLink href="/" Match="NavLinkMatch.All">Gifts</NavLink>
+                <NavLink href="" Match="NavLinkMatch.All">Gifts</NavLink>
                 <NavLink href="setup">People</NavLink>
                 <NavLink href="import">Import</NavLink>
             </nav>
@@ -24,6 +24,12 @@
             <MudIconButton Icon="@(_dark ? Icons.Material.Filled.LightMode : Icons.Material.Filled.DarkMode)"
                            Color="Color.Inherit" OnClick="ToggleDarkAsync" aria-label="Toggle dark mode" />
         </MudTooltip>
+        @if (OperatingSystem.IsBrowser())
+        {
+            <a class="gp-demo-tag" href="g/grandma-grandpa" title="Open the page Grandma &amp; Grandpa's share link shows">Giver view</a>
+        }
+        else
+        {
         <AuthorizeView>
             <form method="post" action="logout" data-enhance="false">
                 <AntiforgeryToken />
@@ -31,7 +37,15 @@
                                Color="Color.Inherit" aria-label="Sign out" />
             </form>
         </AuthorizeView>
+        }
     </MudAppBar>
+    @if (OperatingSystem.IsBrowser())
+    {
+        <div class="gp-demo-banner">
+            Demo: everything runs in your browser with made-up data and resets when you reload.
+            Reading product details from store links is turned off.
+        </div>
+    }
     <MudMainContent>
         <MudContainer MaxWidth="MaxWidth.Large" Class="py-8 gp-main">
             @Body

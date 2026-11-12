@@ -7,6 +7,13 @@ Each group gets a private share link (no login) showing **only** the gifts assig
   "Show what's been bought" is off by default so kids peeking at the screen see nothing.
 - **Family:** open the link you sent them (`/g/<token>`). Anyone with a link can see that group's list; reset it if it leaks.
 
+## Live demo
+
+**[legolife.github.io/GiftPlanner](https://legolife.github.io/GiftPlanner/)**: the real pages and gift rules running entirely in your browser
+(Blazor WebAssembly with SQLite compiled to WebAssembly) on made-up data that resets on reload. Try *Giver view* to see what a family member's
+share link shows. Reading product details from store links needs the server, so it's off in the demo.
+The demo project is `GiftPlanner.Demo`; building it needs `dotnet workload install wasm-tools`.
+
 ## Run locally
 
 ```
